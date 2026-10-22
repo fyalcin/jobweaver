@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Running pre-commit verification tests..."
+
+if command -v uv >/dev/null 2>&1; then
+    uv run --offline --no-sync python scripts/test_isolated.py
+elif [ -x "$HOME/.local/share/mise/installs/uv/0.10.2/uv-x86_64-unknown-linux-musl/uv" ]; then
+    "$HOME/.local/share/mise/installs/uv/0.10.2/uv-x86_64-unknown-linux-musl/uv" run --offline --no-sync python scripts/test_isolated.py
+elif [ -x ".venv/bin/python" ]; then
+    .venv/bin/python scripts/test_isolated.py
+else
+    python3 scripts/test_isolated.py
+fi
+
+echo "Pre-commit verification passed."

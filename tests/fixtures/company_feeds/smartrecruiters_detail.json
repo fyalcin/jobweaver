@@ -1,0 +1,132 @@
+{
+ "id": "744000154971649",
+ "name": "Technology Application Expert in Semiconductor Industry (all genders)",
+ "uuid": "c8587f12-14f4-48b3-a43c-209b601b5c5f",
+ "jobId": "f2f82765-0af6-4a83-9fe1-1200fd9ab508",
+ "jobAdId": "c8a08c6b-b2de-4055-ac03-dcf0b5d55170",
+ "defaultJobAd": false,
+ "refNumber": "REF182M",
+ "company": {
+  "name": "IMS Nanofabrication GmbH",
+  "identifier": "IMSNanofabricationGmbH"
+ },
+ "location": {
+  "city": "Wien",
+  "region": "Wien",
+  "country": "at",
+  "address": "Dresdner Stra\u00dfe 47",
+  "postalCode": "1200",
+  "remote": false,
+  "hybrid": true,
+  "hybridDescription": "20% Homeoffice",
+  "latitude": "48.2372818",
+  "longitude": "16.3794907",
+  "fullLocation": "Wien, Wien, Austria"
+ },
+ "customField": [
+  {
+   "fieldId": "68823b04cdf782668107ef85",
+   "fieldLabel": "Karriere.at Produkt",
+   "valueId": "10d450ff-a7ba-4818-8a14-2e68d3cff495",
+   "valueLabel": "Premium"
+  },
+  {
+   "fieldId": "COUNTRY",
+   "fieldLabel": "Country/Region",
+   "valueId": "at",
+   "valueLabel": "Austria"
+  },
+  {
+   "fieldId": "67a22ff0f843841a28f1c42e",
+   "fieldLabel": "Brands",
+   "valueId": "default",
+   "valueLabel": "IMS Nanofabrication GmbH"
+  },
+  {
+   "fieldId": "67a22ff0f843841a28f1c42f",
+   "fieldLabel": "Department",
+   "valueId": "15894531",
+   "valueLabel": "Flex Technology & Application"
+  },
+  {
+   "fieldId": "67c193980c8aa96a5cc396e3",
+   "fieldLabel": "Contract Type",
+   "valueId": "939a884f-9a6f-4dbc-8461-eb7df3321a44",
+   "valueLabel": "Employee"
+  },
+  {
+   "fieldId": "688102435601c0eaef72e007",
+   "fieldLabel": "Auf Karriere.at Posten?",
+   "valueId": "3300e918-bd60-409f-a76b-b33d522892ec",
+   "valueLabel": "Ja"
+  },
+  {
+   "fieldId": "67c1c42e0c8aa96a5cc396e4",
+   "fieldLabel": "Office Location",
+   "valueId": "8e7dd109-a9b2-4bfe-a6d7-7b542893ba76",
+   "valueLabel": "Dresdner Stra\u00dfe 47, 1200 Vienna"
+  }
+ ],
+ "releasedDate": "2026-10-12T09:45:37.581Z",
+ "creator": {
+  "name": "",
+  "avatarUrl": ""
+ },
+ "postingUrl": "https://jobs.smartrecruiters.com/IMSNanofabricationGmbH/744000154971649-technology-application-expert-in-semiconductor-industry-all-genders-",
+ "applyUrl": "https://jobs.smartrecruiters.com/IMSNanofabricationGmbH/744000154971649-technology-application-expert-in-semiconductor-industry-all-genders-?oga=true",
+ "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/IMSNanofabricationGmbH/publication/c8587f12-14f4-48b3-a43c-209b601b5c5f?dcr_ci=IMSNanofabricationGmbH",
+ "jobAd": {
+  "sections": {
+   "companyDescription": {
+    "title": "Company Description",
+    "text": "<p>At IMS Nanofabrication, we shape the future \u2014 one nanometer at a time. Headquartered in Austria, with subsidiaries in Vienna, Taiwan, South Korea, and the USA, we are a&#xa0;<strong>global leader in semiconductor technology</strong>. Our cutting-edge&#xa0;<strong>mask writers power the world's most advanced chip manufacturing</strong>, making high-performance smartphones, PCs, and data centers possible. By pushing the boundaries of nanofabrication, we enable innovation at the smallest scale \u2014"
+   },
+   "jobDescription": {
+    "title": "Job Description",
+    "text": "<p>As Technology Application Expert in our FLEX product line, you connect customer applications with product development and turn complex technical requirements into valuable product features. Working closely with Product Management, Application Engineering, and R&amp;D, you help bring new solutions from concept to successful application in a highly innovative semiconductor environment.</p><p>&#xa0;</p><p><strong>Your Responsibilities</strong></p><ul><li>Analyze customer use cases and translate "
+   },
+   "qualifications": {
+    "title": "Qualifications",
+    "text": "<ul><li>Master\u2019s degree in Physics, Engineering, Mechatronics, Electronics, Mechanical Engineering, or a related technical field</li><li>At least three years of relevant technical experience, ideally in the semiconductor industry</li><li>Strong understanding of semiconductor manufacturing equipment and processes; experience with electron-beam, lithography, metrology, inspection, or optical systems is an advantage</li><li>Experience working with R&amp;D teams and translating customer needs into e"
+   },
+   "additionalInformation": {
+    "title": "Additional Information",
+    "text": "<p><u>What you can look forward to:</u></p><ul><li><strong>Career &amp; Development:</strong>&#xa0;Exciting opportunities to grow professionally and personally - in an international environment</li><li><strong>Team Culture:&#xa0;</strong>Dynamic, collegial and open to new ideas - together we are writing the future</li><li><strong>Health &amp; well-being:</strong>&#xa0;Company doctor and psychologist - support for your health</li><li><strong>Bonus program:</strong>&#xa0;All employees benefit from"
+   },
+   "videos": {
+    "title": "Videos To Watch",
+    "urls": [
+     "https://youtu.be/9iZ4FwcKD04?feature=shared"
+    ],
+    "text": ""
+   }
+  }
+ },
+ "active": true,
+ "visibility": "PUBLIC",
+ "industry": {
+  "id": "nanotechnology",
+  "label": "Nanotechnology"
+ },
+ "function": {
+  "id": "engineering",
+  "label": "Engineering"
+ },
+ "department": {
+  "id": 15894531,
+  "label": "Flex Technology & Application"
+ },
+ "experienceLevel": {
+  "id": "mid_senior_level",
+  "label": "Mid-Senior Level"
+ },
+ "typeOfEmployment": {
+  "id": "permanent",
+  "label": "Full-time"
+ },
+ "language": {
+  "code": "en",
+  "label": "English",
+  "labelNative": "English (US)"
+ }
+}

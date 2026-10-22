@@ -1,0 +1,38 @@
+{
+  "packages": [
+    {
+      "namespace": "preview",
+      "name": "moderner-cv",
+      "version": "0.2.1",
+      "files": [
+        "lib.typ",
+        "typst.toml"
+      ]
+    },
+    {
+      "namespace": "preview",
+      "name": "fontawesome",
+      "version": "0.6.0",
+      "files": [
+        "lib.typ",
+        "lib-impl.typ",
+        "lib-gen-map.typ",
+        "lib-gen-func.typ",
+        "typst.toml"
+      ]
+    }
+  ],
+  "fonts": [
+    "NewCM10-Regular.otf",
+    "NewCM10-Bold.otf",
+    "NewCM10-Italic.otf",
+    "NewCM10-BoldItalic.otf",
+    "Font Awesome 7 Free-Regular-400.otf",
+    "Font Awesome 7 Free-Solid-900.otf",
+    "Font Awesome 7 Brands-Regular-400.otf",
+    "SourceSansPro-Regular.otf",
+    "SourceSansPro-Bold.otf",
+    "SourceSansPro-RegularIt.otf",
+    "SourceSansPro-BoldIt.otf"
+  ]
+}

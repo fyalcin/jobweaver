@@ -1,0 +1,123 @@
+# Career record of a fictional applicant. Format: docs/career-record/FORMAT.md
+# Check it with:  uv run python career_record.py check examples/career_record.example.yaml
+format: 1
+name: Alex Example, MSc
+
+applicant_facts:
+  - id: location
+    text: Graz, Austria
+    de: Graz, Österreich
+  - id: permit
+    text: "Rot-Weiß-Rot Karte plus: unrestricted Austrian labour-market access."
+    de: "Rot-Weiß-Rot Karte plus: uneingeschränkter Zugang zum österreichischen Arbeitsmarkt."
+  - id: languages
+    text: "English: C1 | German: B2 | Spanish: native"
+    de: "Englisch: C1 | Deutsch: B2 | Spanisch: Muttersprache"
+
+application_policies:
+  - id: salary
+    rule: Ask 10 % above the figure in the posting; ask Alex when the posting gives none.
+  - id: talent-pool
+    rule: Yes, except for recruiting agencies (ask).
+  - id: notice
+    rule: Ask Alex; never state a start date in a letter.
+
+role_families:
+  - id: research-software
+    label: Research software
+    headline: Research Software Engineer | Climate Data & Python
+    headline_de: Research Software Engineer | Klimadaten & Python
+    terms: [research, climate, scientific, university]
+  - id: data-engineering
+    label: Python / data engineering
+    headline: Python Developer | Data Pipelines & Automation
+    terms: [data engineer, pipeline, etl, python developer]
+
+entries:
+  - id: weather-lab
+    type: role
+    title: Research Assistant
+    organisation: Institute for Weather Studies, University of Graz
+    period: 2019 – 2023
+    description: >-
+      Four-year research position in a climate modelling group; Alex prepared and analysed
+      model output for two funded projects.
+    angles:
+      research-software: Four years of turning model output into data that a research group relied on.
+      data-engineering: Daily work with large gridded datasets that had to be cleaned, merged and checked.
+    claims:
+      - id: weather-lab-pipeline
+        text: Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files.
+        de: Python-Skripte geschrieben, die 40 TB Modelldaten in auswertbare NetCDF-Dateien umwandeln.
+        ownership: own
+        cv: true
+        evidence: Group wiki page and the scripts in the group's GitLab (2021).
+        stretches:
+          - text: Built the group's data preparation pipeline for 40 TB of climate model output.
+            defence: It was a set of scripts run in sequence, not a framework; I wrote all of them.
+      - id: weather-lab-checker
+        text: Adapted an existing quality-control tool to flag corrupted model runs before analysis.
+        ownership: adapted
+        cv: true
+        evidence: Commit history of the group's qc-tools fork.
+      - id: weather-lab-teaching
+        text: Supervised two bachelor theses on precipitation statistics.
+        ownership: own
+        cv: false
+        evidence: Thesis acknowledgements.
+
+  - id: rainfall-package
+    type: project
+    title: rainfall-stats (open-source Python package)
+    links:
+      - https://example.org/rainfall-stats
+    period: 2022 – present
+    description: >-
+      Small open-source package for return-period statistics of rainfall series, used in the
+      group's papers.
+    angles:
+      research-software: A released package that other researchers install from PyPI.
+    claims:
+      - id: rainfall-author
+        text: Main developer of rainfall-stats, released on PyPI with three releases.
+        ownership: own
+        cv: true
+        evidence: PyPI release history and GitHub contributors page.
+      - id: rainfall-tests
+        text: Basic unit tests with pytest for the package's core functions.
+        ownership: basics
+        evidence: tests/ folder, 12 tests.
+
+  - id: job-tracker
+    type: project
+    title: Personal job tracker
+    period: 2025
+    description: An AI-built tool that collects job postings and drafts applications; Alex specified and runs it.
+    claims:
+      - id: job-tracker-operate
+        text: Specified and operate an AI-built job-search tool that scores postings against my CV.
+        ownership: steered
+        cv: false
+        evidence: Private repository and its design notes.
+      - id: job-tracker-react
+        text: React frontend development.
+        ownership: cut
+        reason: The frontend was written by an AI agent; Alex cannot defend React work in an interview.
+
+  - id: msc
+    type: education
+    title: MSc in Meteorology
+    organisation: University of Graz
+    period: 2017 – 2019
+    description: Master's degree with a thesis on extreme precipitation.
+    claims:
+      - id: msc-degree
+        text: MSc in Meteorology, University of Graz, 2019.
+        de: MSc in Meteorologie, Universität Graz, 2019.
+        ownership: own
+        cv: true
+        evidence: Degree certificate.
+
+forbidden_phrases:
+  - test automation
+  - architected

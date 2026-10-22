@@ -1,0 +1,43 @@
+% Layout for CVs rendered from a career record (career_cv.py). No facts: the code fills the placeholders.
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[default,type1]{sourcesanspro}
+\usepackage[a4paper,margin=19mm]{geometry}
+\usepackage{enumitem,xcolor,hyperref,titlesec}
+\definecolor{ink}{RGB}{0,65,110}
+\hypersetup{colorlinks=true,urlcolor=ink,pdfauthor={Alex Example},pdftitle={Alex Example - Python Developer}}
+\input{glyphtounicode}\pdfgentounicode=1
+\pagestyle{empty}\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}
+\setlist[itemize]{leftmargin=4mm,itemsep=2pt,topsep=3pt,parsep=0pt}
+\titleformat{\section}{\large\bfseries\color{ink}}{}{0pt}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\begin{document}
+\raggedright\setlength{\emergencystretch}{2em}
+{\fontsize{28pt}{32pt}\selectfont\bfseries\color{ink} Alex Example, MSc}\par
+\vspace{4pt}
+{\fontsize{11pt}{14pt}\selectfont Python Developer | Data Pipelines \& Automation\par}
+\vspace{4pt}
+{\fontsize{11pt}{14pt}\selectfont
+Graz, Austria\par}
+\vspace{3pt}
+{\fontsize{11pt}{14pt}\selectfont Rot-Weiß-Rot Karte plus: unrestricted Austrian labour-market access.\par}
+\section{Experience}
+\textbf{Research Assistant} \hfill 2019 – 2023\\Institute for Weather Studies, University of Graz
+\begin{itemize}
+\item Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files.
+\item Adapted an existing quality-control tool to flag corrupted model runs before analysis.
+\end{itemize}
+\vspace{8pt}
+{\large\bfseries Alex Example | Software, publications and education}
+\section{Selected Python Software}
+\textbf{rainfall-stats (open-source Python package)}\\
+\href{https://example.org/rainfall-stats}{example.org/rainfall-stats}
+\begin{itemize}
+\item Main developer of rainfall-stats, released on PyPI with three releases.
+\end{itemize}
+\section{Education}
+MSc in Meteorology, University of Graz, 2019.
+\section{Languages}
+English: C1 \enspace | \enspace German: B2 \enspace | \enspace Spanish: native
+\end{document}

@@ -1,0 +1,1056 @@
+[
+  {
+    "id": "demo_01",
+    "job_url": "https://jobs.example/roles/demo-01",
+    "apply_url": "https://jobs.example/apply/demo-01",
+    "apply_type": "external",
+    "company": "Cumulus Research",
+    "title": "Research Software Engineer",
+    "location": "Graz, Austria",
+    "source": "company-feeds",
+    "description": "Research Software Engineer at Cumulus Research\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 62,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 0,
+    "match_score": 91,
+    "status": "new",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, NetCDF, xarray, Git",
+    "tools_technologies": [
+      "Python",
+      "NetCDF",
+      "xarray",
+      "Git"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 62,000 gross per year",
+    "salary_yearly": 62000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_02",
+    "job_url": "https://jobs.example/roles/demo-02",
+    "apply_url": "https://jobs.example/apply/demo-02",
+    "apply_type": "external",
+    "company": "Brookline Data",
+    "title": "Python Data Engineer",
+    "location": "Vienna, Austria",
+    "source": "company-feeds",
+    "description": "Python Data Engineer at Brookline Data\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 66,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 1,
+    "match_score": 84,
+    "status": "interview",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, SQL, ETL, Docker",
+    "tools_technologies": [
+      "Python",
+      "SQL",
+      "ETL",
+      "Docker"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 66,000 gross per year",
+    "salary_yearly": 66000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_03",
+    "job_url": "https://jobs.example/roles/demo-03",
+    "apply_url": "https://jobs.example/apply/demo-03",
+    "apply_type": "external",
+    "company": "Rainfall Commons",
+    "title": "Scientific Python Developer",
+    "location": "Remote (Austria)",
+    "source": "manual",
+    "description": "Scientific Python Developer at Rainfall Commons\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 60,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 2,
+    "match_score": 89,
+    "status": "applied",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, statistics, pytest, packaging",
+    "tools_technologies": [
+      "Python",
+      "statistics",
+      "pytest",
+      "packaging"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 60,000 gross per year",
+    "salary_yearly": 60000,
+    "work_model": "Remote",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_04",
+    "job_url": "https://jobs.example/roles/demo-04",
+    "apply_url": "https://jobs.example/apply/demo-04",
+    "apply_type": "external",
+    "company": "Northwind Signals",
+    "title": "Climate Data Analyst",
+    "location": "Graz, Austria",
+    "source": "company-feeds",
+    "description": "Climate Data Analyst at Northwind Signals\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 58,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 3,
+    "match_score": 87,
+    "status": "interested",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, NetCDF, statistics",
+    "tools_technologies": [
+      "Python",
+      "NetCDF",
+      "statistics"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 58,000 gross per year",
+    "salary_yearly": 58000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_05",
+    "job_url": "https://jobs.example/roles/demo-05",
+    "apply_url": "https://jobs.example/apply/demo-05",
+    "apply_type": "external",
+    "company": "Maple Circuit",
+    "title": "Junior Data Engineer",
+    "location": "Linz, Austria",
+    "source": "company-feeds",
+    "description": "Junior Data Engineer at Maple Circuit\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 52,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 4,
+    "match_score": 76,
+    "status": "new",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, SQL, pandas",
+    "tools_technologies": [
+      "Python",
+      "SQL",
+      "pandas"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 52,000 gross per year",
+    "salary_yearly": 52000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Moderate",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_06",
+    "job_url": "https://jobs.example/roles/demo-06",
+    "apply_url": "https://jobs.example/apply/demo-06",
+    "apply_type": "external",
+    "company": "Cloudbank Analytics",
+    "title": "Environmental Data Scientist",
+    "location": "Vienna, Austria",
+    "source": "manual",
+    "description": "Environmental Data Scientist at Cloudbank Analytics\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 64,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 5,
+    "match_score": 81,
+    "status": "applied",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, statistics, climate modelling",
+    "tools_technologies": [
+      "Python",
+      "statistics",
+      "climate modelling"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 64,000 gross per year",
+    "salary_yearly": 64000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_07",
+    "job_url": "https://jobs.example/roles/demo-07",
+    "apply_url": "https://jobs.example/apply/demo-07",
+    "apply_type": "external",
+    "company": "Silverfern Systems",
+    "title": "Senior Platform Engineer",
+    "location": "Vienna, Austria",
+    "source": "company-feeds",
+    "description": "Senior Platform Engineer at Silverfern Systems\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B2 is required.\n\nSalary\nEUR 82,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 6,
+    "match_score": 41,
+    "status": "not_interested",
+    "german_level": "B2",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B2 is required.",
+    "skills": "Kubernetes, Terraform, Go",
+    "tools_technologies": [
+      "Kubernetes",
+      "Terraform",
+      "Go"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 82,000 gross per year",
+    "salary_yearly": 82000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Low",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_08",
+    "job_url": "https://jobs.example/roles/demo-08",
+    "apply_url": "https://jobs.example/apply/demo-08",
+    "apply_type": "external",
+    "company": "Morrow Observatory",
+    "title": "Research Data Steward",
+    "location": "Innsbruck, Austria",
+    "source": "company-feeds",
+    "description": "Research Data Steward at Morrow Observatory\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 56,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 0,
+    "match_score": 78,
+    "status": "new",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, metadata, scientific data",
+    "tools_technologies": [
+      "Python",
+      "metadata",
+      "scientific data"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 56,000 gross per year",
+    "salary_yearly": 56000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Moderate",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_09",
+    "job_url": "https://jobs.example/roles/demo-09",
+    "apply_url": "https://jobs.example/apply/demo-09",
+    "apply_type": "external",
+    "company": "Pebblegrid Labs",
+    "title": "Python Developer",
+    "location": "Graz, Austria",
+    "source": "manual",
+    "description": "Python Developer at Pebblegrid Labs\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 59,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 1,
+    "match_score": 80,
+    "status": "offer",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, Git, data processing",
+    "tools_technologies": [
+      "Python",
+      "Git",
+      "data processing"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 59,000 gross per year",
+    "salary_yearly": 59000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_10",
+    "job_url": "https://jobs.example/roles/demo-10",
+    "apply_url": "https://jobs.example/apply/demo-10",
+    "apply_type": "external",
+    "company": "Amberline Metrics",
+    "title": "Analytics Engineer",
+    "location": "Vienna, Austria",
+    "source": "company-feeds",
+    "description": "Analytics Engineer at Amberline Metrics\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 2,
+    "match_score": 67,
+    "status": "rejected",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "SQL, dbt, Python",
+    "tools_technologies": [
+      "SQL",
+      "dbt",
+      "Python"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 61,000 gross per year",
+    "salary_yearly": 61000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Moderate",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_11",
+    "job_url": "https://jobs.example/roles/demo-11",
+    "apply_url": "https://jobs.example/apply/demo-11",
+    "apply_type": "external",
+    "company": "Bluegrove Forecasts",
+    "title": "Forecast Verification Scientist",
+    "location": "Remote (Austria)",
+    "source": "company-feeds",
+    "description": "Forecast Verification Scientist at Bluegrove Forecasts\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 63,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 3,
+    "match_score": 88,
+    "status": "interested",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, statistics, NetCDF",
+    "tools_technologies": [
+      "Python",
+      "statistics",
+      "NetCDF"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 63,000 gross per year",
+    "salary_yearly": 63000,
+    "work_model": "Remote",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_12",
+    "job_url": "https://jobs.example/roles/demo-12",
+    "apply_url": "https://jobs.example/apply/demo-12",
+    "apply_type": "external",
+    "company": "Lattice Orchard",
+    "title": "Frontend Engineer",
+    "location": "Vienna, Austria",
+    "source": "manual",
+    "description": "Frontend Engineer at Lattice Orchard\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B2 is required.\n\nSalary\nEUR 65,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 4,
+    "match_score": 28,
+    "status": "not_interested",
+    "german_level": "B2",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B2 is required.",
+    "skills": "React, TypeScript, CSS",
+    "tools_technologies": [
+      "React",
+      "TypeScript",
+      "CSS"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 65,000 gross per year",
+    "salary_yearly": 65000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Low",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_13",
+    "job_url": "https://jobs.example/roles/demo-13",
+    "apply_url": "https://jobs.example/apply/demo-13",
+    "apply_type": "external",
+    "company": "Riverglass Energy",
+    "title": "Energy Data Analyst",
+    "location": "Linz, Austria",
+    "source": "company-feeds",
+    "description": "Energy Data Analyst at Riverglass Energy\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 57,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 5,
+    "match_score": 73,
+    "status": "new",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, pandas, SQL",
+    "tools_technologies": [
+      "Python",
+      "pandas",
+      "SQL"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 57,000 gross per year",
+    "salary_yearly": 57000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Moderate",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_14",
+    "job_url": "https://jobs.example/roles/demo-14",
+    "apply_url": "https://jobs.example/apply/demo-14",
+    "apply_type": "external",
+    "company": "Dawntrail Science",
+    "title": "Scientific Software Maintainer",
+    "location": "Graz, Austria",
+    "source": "company-feeds",
+    "description": "Scientific Software Maintainer at Dawntrail Science\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 6,
+    "match_score": 85,
+    "status": "applied",
+    "german_level": "none",
+    "requires_german": false,
+    "german_strength": "none",
+    "german_evidence": "German is not required.",
+    "skills": "Python, packaging, Git, pytest",
+    "tools_technologies": [
+      "Python",
+      "packaging",
+      "Git",
+      "pytest"
+    ],
+    "requirements": [
+      "Python for scientific data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Maintain reproducible climate data tools for a small research team.",
+    "salary": "EUR 61,000 gross per year",
+    "salary_yearly": 61000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Strong",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "The record does not describe production services or on-call duties."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  },
+  {
+    "id": "demo_15",
+    "job_url": "https://jobs.example/roles/demo-15",
+    "apply_url": "https://jobs.example/apply/demo-15",
+    "apply_type": "external",
+    "company": "Mossfield Instruments",
+    "title": "Technical Data Specialist",
+    "location": "Salzburg, Austria",
+    "source": "manual",
+    "description": "Technical Data Specialist at Mossfield Instruments\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 54,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "days_ago": 0,
+    "match_score": 70,
+    "status": "new",
+    "german_level": "B1",
+    "requires_german": true,
+    "german_strength": "required",
+    "german_evidence": "German B1 is required for team communication.",
+    "skills": "Python, CSV, quality control",
+    "tools_technologies": [
+      "Python",
+      "CSV",
+      "quality control"
+    ],
+    "requirements": [
+      "Python for data processing",
+      "Experience cleaning and checking datasets",
+      "Version control with Git"
+    ],
+    "tasks": [
+      "Prepare and validate datasets",
+      "Maintain Python scripts",
+      "Document methods and results"
+    ],
+    "summary": "Prepare and validate datasets used by an analytics team.",
+    "salary": "EUR 54,000 gross per year",
+    "salary_yearly": 54000,
+    "work_model": "Hybrid (Home Office)",
+    "experience_years": "2+ years",
+    "education_level": "Degree in a quantitative subject",
+    "match_analysis": {
+      "tier": "Moderate",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "strengths": [
+        {
+          "title": "Python data preparation",
+          "detail": "The career record describes scripts converting 40 TB of model output into NetCDF files."
+        },
+        {
+          "title": "Quality checks",
+          "detail": "Alex adapted a tool to flag corrupted model runs before analysis."
+        }
+      ],
+      "gaps": [
+        {
+          "title": "Experience to clarify",
+          "detail": "Production SQL and container workflows need further evidence."
+        }
+      ],
+      "tips": [
+        {
+          "title": "Use one concrete example",
+          "detail": "Explain the 40 TB preparation workflow and what Alex wrote personally."
+        },
+        {
+          "title": "Keep claims specific",
+          "detail": "Describe pytest experience as basic tests, as stated in the career record."
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,227 @@
+\documentclass[9pt, letterpaper]{article}
+
+% Placeholder base CV template — user-agnostic (safe to commit).
+% Each user's real templates live in profiles/<user>/base-cv-tex/ and take
+% precedence over this file via user_assets.resolve_user_path().
+
+% Packages:
+\usepackage[
+    ignoreheadfoot,
+    top=1.5 cm,
+    bottom=1.5 cm,
+    left=2 cm,
+    right=2 cm,
+    footskip=0.7 cm,
+]{geometry}
+\usepackage[explicit]{titlesec}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[dvipsnames]{xcolor}
+\definecolor{primaryColor}{RGB}{0, 79, 144}
+\usepackage{enumitem}
+\usepackage{fontawesome5}
+\usepackage{amsmath}
+\usepackage[
+pdftitle={Alex Muster - Software Developer},
+    pdfauthor={Alex Muster},
+    colorlinks=true,
+    urlcolor=primaryColor
+]{hyperref}
+\usepackage{calc}
+\usepackage{changepage}
+\usepackage{paracol}
+\usepackage{ifthen}
+\usepackage{needspace}
+\usepackage{iftex}
+
+\ifPDFTeX
+    \input{glyphtounicode}
+    \pdfgentounicode=1
+    \usepackage[T1]{fontenc}
+    \usepackage[utf8]{inputenc}
+    \usepackage{lmodern}
+\fi
+
+\usepackage[default, type1]{sourcesanspro}
+
+% Settings:
+\AtBeginEnvironment{adjustwidth}{\partopsep0pt}
+\pagestyle{empty}
+\setcounter{secnumdepth}{0}
+\setlength{\parindent}{0pt}
+\setlength{\topskip}{0pt}
+\setlength{\columnsep}{0.15cm}
+
+\titleformat{\section}{
+    \needspace{4\baselineskip}
+    \Large\color{primaryColor}
+}{
+}{
+}{
+    \textbf{#1}\hspace{0.15cm}\titlerule[0.8pt]\hspace{-0.1cm}
+}[]
+
+\titlespacing{\section}{
+    -1pt
+}{
+    0.3 cm
+}{
+    0.2 cm
+}
+
+\newenvironment{highlights}{
+    \begin{itemize}[
+        topsep=0.10 cm,
+        parsep=0.10 cm,
+        partopsep=0pt,
+        itemsep=0pt,
+        leftmargin=0.4 cm + 10pt
+    ]
+}{
+    \end{itemize}
+}
+
+\newenvironment{onecolentry}{
+    \begin{adjustwidth}{
+        0.2 cm + 0.00001 cm
+    }{
+        0.2 cm + 0.00001 cm
+    }
+}{
+    \end{adjustwidth}
+}
+
+\newenvironment{twocolentry}[2][]{
+    \onecolentry
+    \def\secondColumn{#2}
+    \setcolumnwidth{\fill, 4.5 cm}
+    \begin{paracol}{2}
+}{
+    \switchcolumn \raggedleft \secondColumn
+    \end{paracol}
+    \endonecolentry
+}
+
+\newenvironment{header}{
+    \setlength{\topsep}{0pt}\par\kern\topsep\centering\color{primaryColor}\linespread{1.5}
+}{
+    \par\kern\topsep
+}
+
+% Link setup
+\let\hrefWithoutArrow\href
+\renewcommand{\href}[2]{\hrefWithoutArrow{#1}{\ifthenelse{\equal{#2}{}}{ }{#2 }\raisebox{.15ex}{\footnotesize \faExternalLink*}}}
+
+\begin{document}
+    \newcommand{\AND}{\unskip
+        \cleaders\copy\ANDbox\hskip\wd\ANDbox
+        \ignorespaces
+    }
+    \newsavebox\ANDbox
+    \sbox\ANDbox{}
+
+    % HEADER
+    \begin{header}
+        \fontsize{30 pt}{30 pt}
+        \textbf{Alex Muster, BSc}
+
+        \vspace{0.3 cm}
+
+        \normalsize
+        \mbox{{\footnotesize\faMapMarker*}\hspace*{0.13cm}Vienna, Austria}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm%
+        \mbox{\hrefWithoutArrow{mailto:alex.muster@example.com}{{\footnotesize\faEnvelope[regular]}\hspace*{0.13cm}alex.muster@example.com}}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm%
+        \mbox{\hrefWithoutArrow{https://www.linkedin.com/in/alexmuster/}{{\footnotesize\faLinkedinIn}\hspace*{0.13cm}alexmuster}}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm%
+        \mbox{\hrefWithoutArrow{https://github.com/alexmuster}{{\footnotesize\faGithub}\hspace*{0.13cm}alexmuster}}%
+
+        \vspace{0.15cm}
+        \mbox{{\color{black}\footnotesize\faIdCard[regular]}\hspace*{0.13cm}\textbf{Eligible to work in the EU}}%
+    \end{header}
+
+    \vspace{0.1 cm}
+
+    \section{Professional Profile}
+        \begin{onecolentry}
+            \textbf{Software developer} with over \textbf{6 years of experience} building web applications, data-processing pipelines, and automation tooling. Comfortable across the stack: backend services, databases, and the Linux/Docker infrastructure they run on. Seeking backend, automation, and full-stack roles.
+        \end{onecolentry}
+
+    \section{Technical Skills}
+        \begin{onecolentry}
+            \textbf{Programming:} Python, JavaScript/TypeScript, SQL, Bash
+        \end{onecolentry}
+        \begin{onecolentry}
+            \textbf{Web \& APIs:} REST APIs, FastAPI, Flask, React, HTML/CSS
+        \end{onecolentry}
+        \begin{onecolentry}
+            \textbf{Data:} PostgreSQL, MySQL, pandas, NumPy, ETL pipelines
+        \end{onecolentry}
+        \begin{onecolentry}
+            \textbf{Infrastructure:} Linux, Docker \& Docker Compose, Git, CI/CD, Nginx
+        \end{onecolentry}
+        \begin{onecolentry}
+            \textbf{Languages:} English (C1), German (B2)
+        \end{onecolentry}
+
+    \section{Experience}
+
+        \begin{twocolentry}{
+            Vienna, Austria \\
+            2021 -- Present
+        }
+            \textbf{Senior Software Developer} @ Example Tech GmbH
+            \begin{highlights}
+                \item Built and maintain REST APIs (FastAPI, PostgreSQL) serving 50k+ daily requests.
+                \item Designed ETL data-processing pipelines (Python, pandas) consolidating 10+ external sources.
+                \item Containerized services with Docker and introduced CI/CD, reducing deployment times.
+            \end{highlights}
+        \end{twocolentry}
+
+        \vspace{0.2 cm}
+
+        \begin{twocolentry}{
+            Linz, Austria \\
+            Mar 2018 -- Dec 2020
+        }
+            \textbf{Software Developer} @ Data Systems AG
+            \begin{highlights}
+                \item Developed internal web tools (Flask, React) used daily for order management.
+                \item Automated recurring reporting tasks with Python scripts, saving ~10 hours weekly.
+            \end{highlights}
+        \end{twocolentry}
+
+    \section{Projects \& Technical Interests}
+
+        \begin{onecolentry}
+            \textbf{Home Lab}
+            \begin{highlights}
+                \item Self-hosted services (Docker Compose) including monitoring, automated backups, and a personal wiki.
+            \end{highlights}
+        \end{onecolentry}
+
+        \begin{onecolentry}
+            \textbf{Open Source}
+            \begin{highlights}
+                \item Occasional contributions to Python CLI tooling; maintainer of a small scraping utility.
+            \end{highlights}
+        \end{onecolentry}
+
+    \section{Education}
+
+        \begin{twocolentry}{
+            2014 -- 2018
+        }
+            \textbf{BSc Software Engineering}, TU Wien
+            \begin{highlights}
+                \item Focus: distributed systems, databases. Thesis: scheduling strategies for batch data pipelines.
+            \end{highlights}
+        \end{twocolentry}
+
+\end{document}

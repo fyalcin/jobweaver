@@ -1,0 +1,50 @@
+node_modules
+__pycache__/
+*.py[cod]
+.Python
+.env
+.env*
+!.env.example
+*.db-shm
+*.db-wal
+*.pdf
+*.tex
+!base-cl-tex/cl_template.tex
+!base-cv-tex/*.tex
+output/
+*.png
+# design-experiment reference screenshots are tracked deliverables
+!design_experiments/**/*.png
+*.aux
+*.out
+*.log
+*.txt
+!CV-plaintext.txt
+!profiles/**/*.txt
+!profiles/**/*.tex
+.cursor
+.vscode/
+# Operational logs (cron scraper output, manual server redirects)
+logs/
+# User state stays outside version control. Only fictional examples belong here.
+profiles/
+*.db
+.venv/
+webapp/dist/
+.demo/
+# macOS Finder metadata
+.DS_Store
+# Session signing secret (auto-generated)
+.session_secret
+
+# Career records live outside this repository (ADR-0004); a profile may link to one.
+profiles/*/career_record.yaml
+profiles/*/career_record.private.yaml
+
+# Prepared fictional documents let the demo run without native compilers.
+!examples/demo/documents/**/*.tex
+!examples/demo/documents/**/*.pdf
+!examples/demo/documents/**/*.png
+
+# Reviewed release media.
+!docs/media/*.png

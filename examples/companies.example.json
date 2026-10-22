@@ -1,0 +1,86 @@
+{
+  "_note": "Copy to profiles/<user>/companies.json. Enable daily_scraper.company_feeds.enabled in your profile configuration. Select employers and location filters before collection.",
+  "filters": {
+    "location_pattern": "wien|vienna|klosterneuburg|laxenburg|seibersdorf|austria.*remote|remote.*austria",
+    "english_only": false,
+    "include_titles": [],
+    "exclude_titles": [],
+    "max_age_days": null
+  },
+  "companies": [
+    {
+      "name": "Bitpanda",
+      "connector": "greenhouse",
+      "identifier": "bitpanda"
+    },
+    {
+      "name": "GoStudent",
+      "connector": "greenhouse",
+      "identifier": "gostudent"
+    },
+    {
+      "name": "PlanRadar",
+      "connector": "greenhouse",
+      "identifier": "planradar"
+    },
+    {
+      "name": "Bitmovin",
+      "connector": "greenhouse",
+      "identifier": "bitmovin"
+    },
+    {
+      "name": "Ketryx",
+      "connector": "greenhouse",
+      "identifier": "ketryx"
+    },
+    {
+      "name": "Prewave",
+      "connector": "personio",
+      "identifier": "prewave"
+    },
+    {
+      "name": "OMV",
+      "connector": "successfactors_rss",
+      "identifier": "careers.omv.com",
+      "location_keyword": "Vienna"
+    },
+    {
+      "name": "Dynatrace",
+      "connector": "successfactors_rss",
+      "identifier": "apply.careers.dynatrace.com",
+      "location_keyword": "Vienna"
+    },
+    {
+      "name": "RBI",
+      "connector": "successfactors_rss",
+      "identifier": "jobs.rbinternational.com"
+    },
+    {
+      "name": "UNIDO",
+      "connector": "successfactors_rss",
+      "identifier": "careers.unido.org"
+    },
+    {
+      "name": "Boehringer Ingelheim RCV",
+      "connector": "successfactors_rss",
+      "identifier": "jobs.boehringer-ingelheim.com",
+      "location_keyword": "Vienna"
+    },
+    {
+      "name": "Borealis",
+      "connector": "successfactors_rss",
+      "identifier": "careers.borealisgroup.com",
+      "location_keyword": "Vienna"
+    },
+    {
+      "name": "IMS Nanofabrication",
+      "connector": "smartrecruiters",
+      "identifier": "IMSNanofabricationGmbH"
+    },
+    {
+      "name": "Sportradar",
+      "connector": "smartrecruiters",
+      "identifier": "sportradar"
+    }
+  ]
+}

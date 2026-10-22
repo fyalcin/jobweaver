@@ -1,0 +1,56 @@
+{
+  "openrouter_model": "z-ai/glm-5.3-flash",
+  "document_model": "z-ai/glm-5.3-flash",
+  "_note_document_model": "document_model controls document generation. openrouter_model controls per-posting scoring. Choose each model deliberately.",
+  "route_cheapest": false,
+  "linkedin": {
+    "keywords": "software engineer OR data scientist OR backend developer",
+    "results_limit": 80,
+    "hours_old": 24,
+    "distance": 10
+  },
+  "karriere": {
+    "keywords": [
+      "software developer",
+      "data scientist"
+    ],
+    "results_limit": 10,
+    "hours_old": 24,
+    "distance": 10
+  },
+  "auto_generate": {
+    "document_engine": "typst",
+    "typst_cv_template": "base-cv-moderner.typ",
+    "min_match_score": 75,
+    "max_german_level": "B1",
+    "tone": "Professional, confident, and persuasive. Quantify achievements where possible.",
+    "compact_cv": false
+  },
+  "linkedin_location": "Vienna, AT",
+  "karriere_region": "wien-und-umgebung",
+  "denoise_sources": [
+    "manual"
+  ],
+  "daily_scraper": {
+    "enable_linkedin": false,
+    "enable_karriere": false,
+    "linkedin": {
+      "keywords": "software engineer OR data scientist OR backend developer",
+      "results_limit": 80,
+      "hours_old": 24,
+      "distance": 10
+    },
+    "karriere": {
+      "keywords": [
+        "software developer",
+        "data scientist"
+      ],
+      "results_limit": 10,
+      "hours_old": 24,
+      "distance": 10
+    },
+    "company_feeds": {
+      "enabled": false
+    }
+  }
+}

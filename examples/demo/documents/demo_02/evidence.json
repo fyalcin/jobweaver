@@ -1,0 +1,17 @@
+{
+  "provenance": "hand-prepared fictional example",
+  "claims": [
+    {
+      "id": "weather-lab-pipeline",
+      "text": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+    },
+    {
+      "id": "weather-lab-checker",
+      "text": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+    },
+    {
+      "id": "rainfall-author",
+      "text": "Main developer of rainfall-stats, released on PyPI with three releases."
+    }
+  ]
+}

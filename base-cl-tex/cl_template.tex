@@ -1,0 +1,30 @@
+\documentclass[11pt,a4paper,sans]{moderncv}
+% Placeholder cover letter template — user-agnostic (safe to commit).
+% Each user's real template lives in profiles/<user>/base-cl-tex/ and takes
+% precedence over this file via user_assets.resolve_user_path().
+\moderncvstyle{banking}
+\moderncvcolor{blue}
+\usepackage[utf8]{inputenc}
+\usepackage{fontawesome5}
+\usepackage[scale=0.75]{geometry}
+\name{[[FIRST_NAME]]}{[[LAST_NAME]]}
+\title{[[TITLE]]}
+\address{[[ADDRESS_LINE]]}{}{}
+\phone[mobile]{[[PHONE]]}
+\email{[[EMAIL]]}
+\extrainfo{[[EXTRA_INFO]]}
+\begin{document}
+
+\recipient{[[COMPANY_NAME]]}{[[LOCATION]]}
+\date{\today}
+
+\opening{[[OPENING]]}
+\closing{[[CLOSING]]}
+
+\makelettertitle
+
+[[BODY]]
+
+\makeletterclosing
+
+\end{document}

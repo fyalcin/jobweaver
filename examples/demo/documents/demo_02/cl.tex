@@ -1,0 +1,40 @@
+% GIMME_APPROVED eyJlbmdpbmUiOiAibGF0ZXgiLCAiZmFtaWx5IjogImRhdGEtZW5naW5lZXJpbmciLCAiam9iIjogeyJjb21wYW55IjogIkJyb29rbGluZSBEYXRhIiwgImNvbXBhbnlfY29udGFjdCI6ICIiLCAidGl0bGUiOiAiUHl0aG9uIERhdGEgRW5naW5lZXIifSwgImtpbmQiOiAibGV0dGVyIiwgImxldHRlciI6IHsiY29udGVudCI6IHsiY2xvc2luZyI6ICJLaW5kIHJlZ2FyZHMsIiwgInBhcmFncmFwaHMiOiBbeyJmYWN0cyI6IFtdLCAidGV4dCI6ICJJIGFtIGFwcGx5aW5nIGZvciB0aGUgUHl0aG9uIERhdGEgRW5naW5lZXIgcm9sZSBhdCBCcm9va2xpbmUgRGF0YS4gVGhlIHdvcmsgeW91IGRlc2NyaWJlIGNvbm5lY3RzIHdpdGggbXkgZXhwZXJpZW5jZSBwcmVwYXJpbmcgY2xpbWF0ZSBkYXRhc2V0cyBmb3IgcmVzZWFyY2guIn0sIHsiZmFjdHMiOiBbIndlYXRoZXItbGFiLXBpcGVsaW5lIiwgIndlYXRoZXItbGFiLWNoZWNrZXIiXSwgInRleHQiOiAiQXQgdGhlIEluc3RpdHV0ZSBmb3IgV2VhdGhlciBTdHVkaWVzLCBJIHdyb3RlIFB5dGhvbiBzY3JpcHRzIHRoYXQgY29udmVydCA0MCBUQiBvZiBtb2RlbCBvdXRwdXQgaW50byBhbmFseXNpcy1yZWFkeSBOZXRDREYgZmlsZXMuIEkgYWxzbyBhZGFwdGVkIGFuIGV4aXN0aW5nIHF1YWxpdHktY29udHJvbCB0b29sIHRvIGZsYWcgY29ycnVwdGVkIG1vZGVsIHJ1bnMgYmVmb3JlIGFuYWx5c2lzLiBUaGVzZSBleGFtcGxlcyBzaG93IHRoZSBkYXRhIHByZXBhcmF0aW9uIGFuZCBjaGVja2luZyB3b3JrIEkgY291bGQgZGlzY3VzcyB3aXRoIHlvdXIgdGVhbS4ifSwgeyJmYWN0cyI6IFsicmFpbmZhbGwtYXV0aG9yIl0sICJ0ZXh0IjogIkkgYW0gdGhlIG1haW4gZGV2ZWxvcGVyIG9mIHJhaW5mYWxsLXN0YXRzLCBhIFB5dGhvbiBwYWNrYWdlIHJlbGVhc2VkIG9uIFB5UEkgd2l0aCB0aHJlZSByZWxlYXNlcy4gSSB3b3VsZCB3ZWxjb21lIHRoZSBjaGFuY2UgdG8gZGlzY3VzcyBob3cgdGhpcyB3b3JrIHJlbGF0ZXMgdG8geW91ciB0ZWFt4oCZcyBuZWVkcy4ifV0sICJzYWx1dGF0aW9uIjogIkRlYXIgaGlyaW5nIHRlYW0sIn0sICJkYXRlIjogIjIyIE9jdG9iZXIgMjAyNiIsICJsYW5ndWFnZSI6ICJlbiJ9LCAic291cmNlX2hhc2giOiAiYzhkNTM0MDAwOTQ3ZDc5YWRhMWQ0NjY5MGY1ODRlMzNiYzNmOTVhYmVjMTEwODQzNjhjNTQ2NDA2NTFiY2Q2OSIsICJ2ZXJzaW9uIjogMn0=
+% Layout for CVs rendered from a career record (career_cv.py). No facts: the code fills the placeholders.
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[default,type1]{sourcesanspro}
+\usepackage[a4paper,margin=19mm]{geometry}
+\usepackage{enumitem,xcolor,hyperref,titlesec}
+\definecolor{ink}{RGB}{0,65,110}
+\hypersetup{colorlinks=true,urlcolor=ink,pdfauthor={Alex Example},pdftitle={Alex Example - Python Developer}}
+\input{glyphtounicode}\pdfgentounicode=1
+\pagestyle{empty}\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}
+\setlist[itemize]{leftmargin=4mm,itemsep=2pt,topsep=3pt,parsep=0pt}
+\titleformat{\section}{\large\bfseries\color{ink}}{}{0pt}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\begin{document}
+\raggedright\setlength{\emergencystretch}{2em}
+{\fontsize{28pt}{32pt}\selectfont\bfseries\color{ink} Alex Example, MSc}\par
+\vspace{4pt}
+{\fontsize{11pt}{14pt}\selectfont Python Developer | Data Pipelines \& Automation\par}
+\vspace{4pt}
+{\fontsize{11pt}{14pt}\selectfont
+Graz, Austria\par}
+\vspace{3pt}
+{\fontsize{11pt}{14pt}\selectfont Rot-Weiß-Rot Karte plus: unrestricted Austrian labour-market access.\par}
+\vspace{16pt}
+Brookline Data\par
+Python Data Engineer\par
+\vspace{6pt}
+22 October 2026\par
+\vspace{12pt}
+\setlength{\parskip}{8pt}
+Dear hiring team,\par
+I am applying for the Python Data Engineer role at Brookline Data. The work you describe connects with my experience preparing climate datasets for research.\par
+At the Institute for Weather Studies, I wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files. I also adapted an existing quality-control tool to flag corrupted model runs before analysis. These examples show the data preparation and checking work I could discuss with your team.\par
+I am the main developer of rainfall-stats, a Python package released on PyPI with three releases. I would welcome the chance to discuss how this work relates to your team’s needs.\par
+Kind regards\par
+\vspace{4pt}
+Alex Example\par
+\end{document}

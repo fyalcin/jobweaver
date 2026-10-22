@@ -1,0 +1,18 @@
+% Layout for CVs rendered from a career record (career_cv.py). No facts: the code fills the placeholders.
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[default,type1]{sourcesanspro}
+\usepackage[a4paper,margin=19mm]{geometry}
+\usepackage{enumitem,xcolor,hyperref,titlesec}
+\definecolor{ink}{RGB}{0,65,110}
+\hypersetup{colorlinks=true,urlcolor=ink,pdfauthor={<<AUTHOR>>},pdftitle={<<TITLE>>}}
+\input{glyphtounicode}\pdfgentounicode=1
+\pagestyle{empty}\setlength{\parindent}{0pt}\setlength{\parskip}{4pt}
+\setlist[itemize]{leftmargin=4mm,itemsep=2pt,topsep=3pt,parsep=0pt}
+\titleformat{\section}{\large\bfseries\color{ink}}{}{0pt}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\begin{document}
+\raggedright\setlength{\emergencystretch}{2em}
+<<BODY>>
+\end{document}

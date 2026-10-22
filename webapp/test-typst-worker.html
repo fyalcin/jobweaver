@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Typst WASM Offline Packages & Fonts Smoke Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #1a1b26; color: #c0caf5; margin: 0; }
+    h1 { margin-top: 0; }
+    .status-badge { font-weight: bold; margin-bottom: 1rem; padding: 0.5rem 1rem; border-radius: 4px; display: inline-block; }
+    .status-testing { background: #3b4261; color: #7aa2f7; }
+    .status-success { background: #1f3833; color: #73daca; }
+    .status-error { background: #442b3a; color: #f7768e; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem; }
+    .card { background: #24283b; padding: 1rem; border-radius: 8px; border: 1px solid #414868; }
+    .preview-box { margin-top: 0.75rem; background: #ffffff; color: #000; border-radius: 4px; overflow: auto; max-height: 500px; padding: 0.5rem; }
+    .preview-box svg { max-width: 100%; height: auto; display: block; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  </style>
+</head>
+<body>
+  <h1>Typst WASM Offline Packages & Fonts Test (Phase 2)</h1>
+  <div id="overall-status" class="status-badge status-testing">Initializing Typst WASM Web Worker...</div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>1. Basic Document Compilation</h3>
+      <div id="status-basic" class="status-badge status-testing">Pending...</div>
+      <div id="output-basic" class="preview-box"></div>
+    </div>
+    <div class="card">
+      <h3>2. Moderner-CV (@preview/moderner-cv:0.2.1 + FontAwesome)</h3>
+      <div id="status-cv" class="status-badge status-testing">Pending...</div>
+      <div id="output-cv" class="preview-box"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { compileTypstClient } from './src/services/typstWorkerClient.js'
+
+    const overallStatus = document.getElementById('overall-status')
+    const statusBasic = document.getElementById('status-basic')
+    const outputBasic = document.getElementById('output-basic')
+    const statusCv = document.getElementById('status-cv')
+    const outputCv = document.getElementById('output-cv')
+
+    const MODERNER_CV_SAMPLE = `#import "@preview/moderner-cv:0.2.1": *
+
+#show: moderner-cv.with(
+  name: "Alex Muster, BSc",
+  subtitle: text(size: 14pt)[Backend Developer],
+  color: rgb("#004f90"),
+  margin: (top: 12mm, bottom: 12mm, left: 12mm, right: 12mm),
+  lang: "en",
+  show-footer: false,
+  social: (
+    email: "alex.muster@example.com",
+    github: "alexmuster",
+    linkedin: "alexmuster",
+    address: "Vienna, Austria",
+  ),
+)
+
+#v(0.4cm)
+
+= Professional Summary
+#cv-line([], [
+  Backend developer who builds reliable data pipelines and web services in Python.
+])
+
+= Technical Skills
+#cv-line([*Languages*], [Python, SQL, JavaScript])
+#cv-line([*Tools*], [Linux, Docker, Git])
+`
+
+    async function runTests() {
+      const results = {}
+
+      try {
+        // Test 1: Basic string
+        statusBasic.textContent = 'Compiling basic document...'
+        const t0 = performance.now()
+        const basicRes = await compileTypstClient('= Hello World, Typst WASM!\n\nClient-side WebAssembly compilation verified.')
+        const basicElapsed = (performance.now() - t0).toFixed(1)
+        statusBasic.className = 'status-badge status-success'
+        statusBasic.textContent = `SUCCESS (${basicElapsed}ms)`
+        outputBasic.innerHTML = basicRes.result
+        results.basic = { success: true, elapsed: basicElapsed, length: basicRes.result.length }
+
+        // Test 2: moderner-cv with fontawesome icons & fonts
+        statusCv.textContent = 'Compiling moderner-cv with offline packages...'
+        const t1 = performance.now()
+        const cvRes = await compileTypstClient(MODERNER_CV_SAMPLE)
+        const cvElapsed = (performance.now() - t1).toFixed(1)
+        statusCv.className = 'status-badge status-success'
+        statusCv.textContent = `SUCCESS (${cvElapsed}ms)`
+        outputCv.innerHTML = cvRes.result
+        results.cv = {
+          success: true,
+          elapsed: cvElapsed,
+          length: cvRes.result.length,
+          hasSvg: cvRes.result.includes('<svg'),
+          hasIcons: cvRes.result.includes('Font Awesome') || cvRes.result.includes('svg')
+        }
+
+        // Test 3: Client-side PDF binary generation
+        const t2 = performance.now()
+        const pdfRes = await compileTypstClient(MODERNER_CV_SAMPLE, 'pdf')
+        const pdfElapsed = (performance.now() - t2).toFixed(1)
+        const pdfBytes = pdfRes.result
+        const isPdfValid = pdfBytes instanceof Uint8Array &&
+          pdfBytes.length > 1000 &&
+          pdfBytes[0] === 0x25 && pdfBytes[1] === 0x50 && pdfBytes[2] === 0x44 && pdfBytes[3] === 0x46 // %PDF
+        results.pdf = {
+          success: isPdfValid,
+          elapsed: pdfElapsed,
+          byteLength: pdfBytes ? pdfBytes.length : 0,
+          isPdfValid,
+        }
+
+        if (!isPdfValid) {
+          throw new Error('Generated PDF byte array is invalid or corrupted')
+        }
+
+        overallStatus.className = 'status-badge status-success'
+        overallStatus.textContent = `ALL TESTS PASSED: Basic (${basicElapsed}ms) + Moderner-CV SVG (${cvElapsed}ms) + PDF (${pdfElapsed}ms, ${pdfBytes.length} bytes)`
+        window.__TYPST_WASM_RESULT__ = {
+          success: true,
+          results,
+        }
+        console.log('[SmokeTest] Phase 2/4 Results:', window.__TYPST_WASM_RESULT__)
+      } catch (err) {
+        overallStatus.className = 'status-badge status-error'
+        overallStatus.textContent = 'TEST FAILED: ' + err.message
+        window.__TYPST_WASM_RESULT__ = {
+          success: false,
+          error: err.message,
+        }
+        console.error('[SmokeTest] Error:', err)
+      }
+    }
+
+    runTests()
+  </script>
+</body>
+</html>

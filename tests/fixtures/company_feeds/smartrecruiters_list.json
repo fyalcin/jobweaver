@@ -1,0 +1,200 @@
+{
+ "offset": 0,
+ "limit": 100,
+ "totalFound": 2,
+ "content": [
+  {
+   "id": "744000154971649",
+   "name": "Technology Application Expert in Semiconductor Industry (all genders)",
+   "uuid": "c8587f12-14f4-48b3-a43c-209b601b5c5f",
+   "jobAdId": "c8a08c6b-b2de-4055-ac03-dcf0b5d55170",
+   "defaultJobAd": false,
+   "refNumber": "REF182M",
+   "company": {
+    "identifier": "IMSNanofabricationGmbH",
+    "name": "IMS Nanofabrication GmbH"
+   },
+   "releasedDate": "2026-10-12T09:45:37.581Z",
+   "location": {
+    "city": "Wien",
+    "region": "Wien",
+    "country": "at",
+    "address": "Dresdner Stra\u00dfe 47",
+    "postalCode": "1200",
+    "remote": false,
+    "hybrid": true,
+    "hybridDescription": "20% Homeoffice",
+    "latitude": "48.2372818",
+    "longitude": "16.3794907",
+    "fullLocation": "Wien, Wien, Austria"
+   },
+   "industry": {
+    "id": "nanotechnology",
+    "label": "Nanotechnology"
+   },
+   "department": {
+    "id": "15894531",
+    "label": "Flex Technology & Application"
+   },
+   "function": {
+    "id": "engineering",
+    "label": "Engineering"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "67c193980c8aa96a5cc396e3",
+     "fieldLabel": "Contract Type",
+     "valueId": "939a884f-9a6f-4dbc-8461-eb7df3321a44",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67c1c42e0c8aa96a5cc396e4",
+     "fieldLabel": "Office Location",
+     "valueId": "8e7dd109-a9b2-4bfe-a6d7-7b542893ba76",
+     "valueLabel": "Dresdner Stra\u00dfe 47, 1200 Vienna"
+    },
+    {
+     "fieldId": "68823b04cdf782668107ef85",
+     "fieldLabel": "Karriere.at Produkt",
+     "valueId": "10d450ff-a7ba-4818-8a14-2e68d3cff495",
+     "valueLabel": "Premium"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "at",
+     "valueLabel": "Austria"
+    },
+    {
+     "fieldId": "67a22ff0f843841a28f1c42e",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "IMS Nanofabrication GmbH"
+    },
+    {
+     "fieldId": "67a22ff0f843841a28f1c42f",
+     "fieldLabel": "Department",
+     "valueId": "15894531",
+     "valueLabel": "Flex Technology & Application"
+    },
+    {
+     "fieldId": "688102435601c0eaef72e007",
+     "fieldLabel": "Auf Karriere.at Posten?",
+     "valueId": "3300e918-bd60-409f-a76b-b33d522892ec",
+     "valueLabel": "Ja"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/IMSNanofabricationGmbH/postings/744000154971649",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "744000154694079",
+   "name": "Quality Engineer \u2013 Quality Assurance & Incoming Inspection (all genders)",
+   "uuid": "5f6487ac-6073-4288-80d6-0d74861b7d0e",
+   "jobAdId": "d95f3a16-6fb1-42ea-98e4-f54ccc66a978",
+   "defaultJobAd": true,
+   "refNumber": "REF185U",
+   "company": {
+    "identifier": "IMSNanofabricationGmbH",
+    "name": "IMS Nanofabrication GmbH"
+   },
+   "releasedDate": "2026-10-09T14:12:57.454Z",
+   "location": {
+    "city": "Brunn am Gebirge",
+    "region": "Nieder\u00f6sterreich",
+    "country": "at",
+    "address": "Wolfholzgasse",
+    "postalCode": "2345",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "48.1189308",
+    "longitude": "16.2933881",
+    "fullLocation": "Brunn am Gebirge, Nieder\u00f6sterreich, Austria"
+   },
+   "industry": {
+    "id": "nanotechnology",
+    "label": "Nanotechnology"
+   },
+   "department": {
+    "id": "12017239",
+    "label": "Production Quality"
+   },
+   "function": {
+    "id": "production",
+    "label": "Production"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "67c193980c8aa96a5cc396e3",
+     "fieldLabel": "Contract Type",
+     "valueId": "939a884f-9a6f-4dbc-8461-eb7df3321a44",
+     "valueLabel": "Employee"
+    },
+    {
+     "fieldId": "67c1c42e0c8aa96a5cc396e4",
+     "fieldLabel": "Office Location",
+     "valueId": "e56f78f0-79d5-4678-ae67-9fcf8e1b5fe6",
+     "valueLabel": "Wolfholzgasse 20-24, 2345 Brunn am Gebirge"
+    },
+    {
+     "fieldId": "68823b04cdf782668107ef85",
+     "fieldLabel": "Karriere.at Produkt",
+     "valueId": "10d450ff-a7ba-4818-8a14-2e68d3cff495",
+     "valueLabel": "Premium"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "at",
+     "valueLabel": "Austria"
+    },
+    {
+     "fieldId": "67a22ff0f843841a28f1c42e",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "IMS Nanofabrication GmbH"
+    },
+    {
+     "fieldId": "67a22ff0f843841a28f1c42f",
+     "fieldLabel": "Department",
+     "valueId": "12017239",
+     "valueLabel": "Production Quality"
+    },
+    {
+     "fieldId": "688102435601c0eaef72e007",
+     "fieldLabel": "Auf Karriere.at Posten?",
+     "valueId": "3300e918-bd60-409f-a76b-b33d522892ec",
+     "valueLabel": "Ja"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/IMSNanofabricationGmbH/postings/744000154694079",
+   "language": {
+    "code": "de",
+    "label": "German",
+    "labelNative": "Deutsch"
+   }
+  }
+ ]
+}
