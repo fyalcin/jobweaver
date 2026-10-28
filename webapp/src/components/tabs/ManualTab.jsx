@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, RefreshCw, Search, AlertCircle, Briefcase, Mail, Sparkles } from 'lucide-react';
+import { FileText, RefreshCw, Search, AlertCircle, Briefcase, Mail, Sparkles, X } from 'lucide-react';
 
 export function ManualTab({
   manualUrl, setManualUrl,
@@ -10,7 +10,8 @@ export function ManualTab({
   manualCompact, setManualCompact,
   cvProfiles,
   manualDescription, setManualDescription,
-  addingManualJob, handleAddManualJob
+  addingManualJob, handleAddManualJob,
+  manualNotice, setManualNotice, retryManualAnalysis
 }) {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -22,7 +23,7 @@ export function ManualTab({
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input type="url" className="input-base" style={{ flex: 1, minWidth: 0 }}
               value={manualUrl} onChange={e => { setManualUrl(e.target.value); setFetchUrlWarning(null); }}
-              placeholder="Link to a job posting (career site, karriere.at, Greenhouse, Personio, ...)" />
+              placeholder="Paste job posting URL..." />
             <button className="btn btn-primary" onClick={handleFetchJobUrl} disabled={fetchingUrl || !manualUrl.trim()} style={{ whiteSpace: 'nowrap', minWidth: '90px' }}>
               {fetchingUrl ? <RefreshCw className="spinner" size={16} /> : <Search size={16} />}
               &nbsp;Fetch
@@ -47,7 +48,7 @@ export function ManualTab({
         <div className="form-group" style={{ marginBottom: '1rem' }}>
           <label className="form-label">CV Profile</label>
           <select className="input-base" value={manualCvProfile} onChange={e => setManualCvProfile(e.target.value)}>
-            <option value="">Automatic selection from job description</option>
+            <option value="">Choose automatically from job description</option>
             {cvProfiles.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           <small style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '0.5rem' }}>Saved with the manual job and used for CV generation.</small>
@@ -103,6 +104,30 @@ export function ManualTab({
             <span>Add to Database</span>
           </button>
         </div>
+        {manualNotice && (
+          <div role="alert" className="manual-notice" style={{ marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.85rem',
+            border: `1px solid ${manualNotice.kind === 'analysis' ? 'rgba(245,158,11,0.35)' : 'rgba(239,68,68,0.35)'}`,
+            backgroundColor: manualNotice.kind === 'analysis' ? 'rgba(245,158,11,0.07)' : 'rgba(239,68,68,0.07)' }}>
+            <AlertCircle size={16} color={manualNotice.kind === 'analysis' ? '#f59e0b' : 'var(--error-color)'} style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+            <div style={{ flex: 1, minWidth: '12rem' }}>
+              <strong>{manualNotice.message}</strong>
+              <div style={{ color: 'var(--text-secondary)', marginTop: '0.2rem', overflowWrap: 'anywhere' }}>Reason: {manualNotice.reason}</div>
+              {manualNotice.kind === 'analysis' && (
+                <div style={{ color: 'var(--text-secondary)', marginTop: '0.2rem' }}>The posting is in the Jobs list under failed analyses. Retry here or from there.</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              {manualNotice.kind === 'analysis' && retryManualAnalysis && (
+                <button type="button" className="btn btn-secondary" onClick={retryManualAnalysis} style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem' }}>
+                  <RefreshCw size={12} />&nbsp;Retry analysis
+                </button>
+              )}
+              <button type="button" className="btn btn-secondary" aria-label="Dismiss message" title="Dismiss" onClick={() => setManualNotice(null)} style={{ fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

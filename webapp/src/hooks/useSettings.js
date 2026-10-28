@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function useSettings({ addToast }) {
+  const api = useApi();
   const [aiModel, setAiModel] = useState('');
   const [aiTone, setAiTone] = useState('');
   const [scraperConfig, setScraperConfig] = useState(null);
@@ -16,7 +17,7 @@ export function useSettings({ addToast }) {
     } catch {
       addToast('Failed to load scraper config.', 'error');
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const saveConfig = useCallback(async (patch) => {
     setSavingConfig(true);
@@ -30,7 +31,7 @@ export function useSettings({ addToast }) {
     } finally {
       setSavingConfig(false);
     }
-  }, [scraperConfig, addToast]);
+  }, [scraperConfig, api, addToast]);
 
   return {
     aiModel, setAiModel,

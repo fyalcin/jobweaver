@@ -21,7 +21,7 @@
   "auto_generate": {
     "document_engine": "typst",
     "typst_cv_template": "base-cv-moderner.typ",
-    "min_match_score": 75,
+    "min_rating": "good",
     "max_german_level": "B1",
     "tone": "Professional, confident, and persuasive. Quantify achievements where possible.",
     "compact_cv": false

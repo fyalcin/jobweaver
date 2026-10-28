@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function usePersonalize({ addToast }) {
-  const [cv, setCv] = useState(null); // { content, exists, loaded_from, save_path }
+  const api = useApi();
+  const [cv, setCv] = useState(null); // { content, exists, loaded_from, save_path, read_only, template, missing_message }
   const [cvVersion, setCvVersion] = useState(0); // increments whenever disk truth changes
   const [cvLoaded, setCvLoaded] = useState(false);
   const [loadingCv, setLoadingCv] = useState(false);
@@ -20,7 +21,7 @@ export function usePersonalize({ addToast }) {
     } finally {
       setLoadingCv(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const saveCv = useCallback(async (content) => {
     setSavingCv(true);
@@ -32,6 +33,7 @@ export function usePersonalize({ addToast }) {
         exists: true,
         loaded_from: res.data?.save_path || c?.save_path,
         save_path: res.data?.save_path || c?.save_path,
+        missing_message: content.trim() ? null : c?.missing_message,
       }));
       setCvVersion((v) => v + 1);
       addToast('CV saved to disk.', 'success');
@@ -42,7 +44,7 @@ export function usePersonalize({ addToast }) {
     } finally {
       setSavingCv(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const [notes, setNotes] = useState(null); // { notes, exists, loaded_from, save_path }
   const [notesVersion, setNotesVersion] = useState(0);
@@ -62,7 +64,7 @@ export function usePersonalize({ addToast }) {
     } finally {
       setLoadingNotes(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const saveNotes = useCallback(async (notesText) => {
     setSavingNotes(true);
@@ -84,7 +86,7 @@ export function usePersonalize({ addToast }) {
     } finally {
       setSavingNotes(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   return {
     cv,

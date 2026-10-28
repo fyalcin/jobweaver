@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../../api/client';
+import { useApi } from '../../api/context';
 import { Settings, Search, RefreshCw, CheckCircle2, AlertCircle, Palette, Check, Type, Database } from 'lucide-react';
 
 export function SettingsTab({
@@ -9,10 +9,14 @@ export function SettingsTab({
   saveConfig, savingConfig,
   handleDeleteUnreviewed, handleNuke,
   preferences,
+  demo = false,
 }) {
+  const api = useApi();
   const [openrouterModels, setOpenrouterModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [docModel, setDocModel] = useState('');
+  const [verifierModel, setVerifierModel] = useState('auto');
+  const [defaultVerifier, setDefaultVerifier] = useState('hosted default');
 
   useEffect(() => {
     // Keep the field in sync with the saved config until the user edits it.
@@ -21,12 +25,19 @@ export function SettingsTab({
   }, [scraperConfig?.document_model]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVerifierModel(scraperConfig?.letter_verifier_model == null ? 'auto' :
+      scraperConfig.letter_verifier_model === '' ? 'disabled' : scraperConfig.letter_verifier_model);
+  }, [scraperConfig?.letter_verifier_model]);
+
+  useEffect(() => {
     if (openrouterModels.length === 0) {
       // This effect initializes state from the remote model list.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingModels(true);
       api.get('/openrouter/models')
         .then(res => {
+          if (res.data.default_verifier_model) setDefaultVerifier(res.data.default_verifier_model);
           if (res.data.success) {
             setOpenrouterModels(res.data.models);
           }
@@ -34,7 +45,7 @@ export function SettingsTab({
         .catch(err => console.error("Failed to load openrouter models:", err))
         .finally(() => setLoadingModels(false));
     }
-  }, [openrouterModels.length]);
+  }, [api, openrouterModels.length]);
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -64,7 +75,7 @@ export function SettingsTab({
               )}
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-              Personalize your workspace palette. Themes are saved per profile to your user preferences and synchronized across sessions.
+              Choose a workspace palette. Choices are saved per account, or in your browser during the demo.
             </div>
 
             <div className="theme-grid">
@@ -118,7 +129,7 @@ export function SettingsTab({
                 )}
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                Choose a world-class UI typeface designed for clarity and legibility. Your font selection is saved per profile.
+                Choose a typeface for reading and interface text. Choices are saved per account, or in your browser during the demo.
               </div>
 
               <div className="font-grid">
@@ -153,13 +164,14 @@ export function SettingsTab({
         </>
       )}
 
+      <fieldset className="demo-fieldset" disabled={demo}>
       {/* AI Generation Preferences */}
       <div className="settings-section-header">
         <h2 className="settings-section-title">
           <Settings size={20} /> AI Generation Preferences
         </h2>
         <p className="settings-section-desc">
-          Configure LLM providers, generation tone, and intelligent model routing.
+          Choose models for requirement checks, document drafting, and quote verification.
         </p>
       </div>
 
@@ -168,7 +180,7 @@ export function SettingsTab({
           <Settings size={18} /> Model & Generation Settings
         </h3>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Two separate models. The <strong>automation model</strong> scores every scraped posting
+          Two separate models. The <strong>automation model</strong> checks the requirements of every scraped posting
           (roughly 50 calls a day), so keep it cheap. The <strong>documents model</strong> writes your
           CVs and cover letters (about 2 calls per application) — spend there if you want better prose.
         </div>
@@ -258,6 +270,22 @@ export function SettingsTab({
           </div>
         </div>
         <div className="form-group">
+          <label htmlFor="letter-verifier-model" className="form-label">Letter verification model</label>
+          <select id="letter-verifier-model" className="input-base" value={verifierModel}
+            onChange={event => setVerifierModel(event.target.value)}>
+            <option value="auto">Automatic — {docModel.startsWith('custom/') ? docModel : defaultVerifier}</option>
+            <option value="disabled">Disabled — letters will not receive a model evidence check</option>
+            {!['auto', 'disabled'].includes(verifierModel) && !openrouterModels.some(model => model.id === verifierModel) &&
+              <option value={verifierModel}>{verifierModel}</option>}
+            {openrouterModels.map(model => <option key={model.id} value={model.id}>{model.id}</option>)}
+          </select>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            Automatic verification follows a custom writing model through the same endpoint.
+            Hosted writing models use {defaultVerifier}. An explicit selection overrides this choice.
+          </p>
+          {verifierModel === 'disabled' && <p role="status">Model evidence checking is disabled. Review every claim yourself.</p>}
+        </div>
+        <div className="form-group">
           <label htmlFor="ai-tone" className="form-label">Generation Tone / Persona</label>
           <textarea id="ai-tone" aria-label="Generation Tone / Persona" className="input-base" style={{ resize: 'vertical', minHeight: '80px', padding: '0.5rem', fontFamily: 'inherit', fontSize: '14px', lineHeight: '1.4' }}
             value={aiTone} onChange={e => setAiTone(e.target.value)} placeholder="e.g. Highly professional, emphasize leadership..." />
@@ -273,7 +301,9 @@ export function SettingsTab({
           </label>
         </div>
         <button className="btn btn-primary settings-btn-save" style={{ marginTop: '0.5rem' }} disabled={savingConfig}
-          onClick={() => saveConfig({ openrouter_model: aiModel, document_model: docModel, route_cheapest: scraperConfig?.route_cheapest ?? false, auto_generate: { ...scraperConfig?.auto_generate, tone: aiTone } })}>
+          onClick={() => saveConfig({ openrouter_model: aiModel, document_model: docModel,
+            letter_verifier_model: verifierModel === 'auto' ? null : verifierModel === 'disabled' ? '' : verifierModel,
+            route_cheapest: scraperConfig?.route_cheapest ?? false, auto_generate: { ...scraperConfig?.auto_generate, tone: aiTone } })}>
           {savingConfig ? <RefreshCw className="spinner" size={16} /> : <CheckCircle2 size={16} />}
           <span>Save AI Preferences</span>
         </button>
@@ -379,10 +409,11 @@ export function SettingsTab({
               </div>
               <div className="form-row-responsive" style={{ alignItems: 'flex-end' }}>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                  <label htmlFor="auto-min-match-score" className="form-label">Min Match Score</label>
-                  <input id="auto-min-match-score" aria-label="Min Match Score" type="number" className="input-base"
-                    value={scraperConfig.auto_generate?.min_match_score ?? 65}
-                    onChange={e => setScraperConfig(c => ({ ...c, auto_generate: { ...c.auto_generate, min_match_score: parseInt(e.target.value) || 65 } }))} />
+                  <label htmlFor="auto-min-rating" className="form-label">Minimum match rating</label>
+                  <select id="auto-min-rating" className="input-base" value={scraperConfig.auto_generate?.min_rating || 'good'}
+                    onChange={e => setScraperConfig(c => ({ ...c, auto_generate: { ...c.auto_generate, min_rating: e.target.value } }))}>
+                    {['great', 'good', 'decent', 'stretch', 'poor'].map(rating => <option key={rating} value={rating}>{rating[0].toUpperCase() + rating.slice(1)} or better</option>)}
+                  </select>
                 </div>
                 <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                   <label htmlFor="auto-max-german-level" className="form-label">Maximum German Level</label>
@@ -581,7 +612,7 @@ export function SettingsTab({
             <div className="danger-action-info">
               <div className="danger-action-title">Delete Unreviewed Jobs</div>
               <p className="danger-action-desc">
-                Removes all postings with status &ldquo;new&rdquo; or &ldquo;interested&rdquo;. Preserves your application pipeline.
+                Removes all postings with status &ldquo;New&rdquo; or &ldquo;Shortlisted&rdquo;. Preserves your application pipeline.
               </p>
             </div>
             <button className="btn danger-action-btn danger-btn-outline" onClick={handleDeleteUnreviewed}>
@@ -599,11 +630,12 @@ export function SettingsTab({
               </p>
             </div>
             <button className="btn danger-action-btn danger-btn-solid" onClick={handleNuke}>
-              NUKE EVERYTHING
+              Reset Database
             </button>
           </div>
         </div>
       </div>
+      </fieldset>
     </div>
   );
 }

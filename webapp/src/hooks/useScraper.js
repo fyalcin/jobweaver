@@ -1,11 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
+  const api = useApi();
   const [scraping, setScraping] = useState(false);
   const [scrapeLogs, setScrapingLogs] = useState([]);
   const [activeScrapeTaskId, setActiveScrapeTaskId] = useState(null);
   const [scrapeAiProgress, setScrapeAiProgress] = useState(null);
+  const [scrapeStatus, setScrapeStatus] = useState(null);
   const scrapePollInterval = useRef(null);
 
   // Scrape Params
@@ -49,7 +51,7 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
     } catch (err) {
       console.error("Failed to fetch logs", err);
     }
-  }, []);
+  }, [api]);
 
   const fetchUnprocessedJobs = useCallback(async () => {
     try {
@@ -58,19 +60,20 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
     } catch (err) {
       console.error('Failed to fetch unprocessed jobs', err);
     }
-  }, []);
+  }, [api]);
 
   const pollScrapeStatus = useCallback(async (taskId) => {
     try {
       const res = await api.get(`/scrape/status/${taskId}`);
       const { status, logs, result, total, processed, failed } = res.data;
+      setScrapeStatus(status);
       setScrapingLogs([...logs].reverse());
       if (total != null && total > 0) {
         setScrapeAiProgress({ processed: processed ?? 0, total, failed: failed ?? 0 });
       } else {
         setScrapeAiProgress(null);
       }
-      if (status === 'completed' || status === 'failed') {
+      if (['completed', 'failed', 'cancelled', 'interrupted'].includes(status)) {
         clearInterval(scrapePollInterval.current);
         scrapePollInterval.current = null;
         setActiveScrapeTaskId(null);
@@ -79,7 +82,7 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
         if (status === 'completed' && result?.success) {
           addToast(result.message || 'Scraping completed.', 'success');
         } else {
-          addToast(result?.message || 'Scraping failed.', 'error');
+          addToast(result?.message || 'Scraping stopped. Retry explicitly if needed.', status === 'cancelled' ? 'info' : 'error');
         }
         fetchJobs();
         fetchLogs();
@@ -95,13 +98,14 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
       setScrapeAiProgress(null);
       }
     }
-  }, [addToast, fetchJobs, fetchLogs, fetchUnprocessedJobs]);
+  }, [addToast, api, fetchJobs, fetchLogs, fetchUnprocessedJobs]);
 
   const checkActiveScrape = useCallback(async () => {
     try {
       const res = await api.get('/scrape/active');
       if (res.data.active && res.data.task_id) {
         setActiveScrapeTaskId(res.data.task_id);
+        setScrapeStatus(res.data.status);
         setScraping(true);
         const logs = res.data.logs || [];
         setScrapingLogs([...logs].reverse());
@@ -115,13 +119,12 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
     } catch (err) {
       console.error('Failed to check active scrape', err);
     }
-  }, [pollScrapeStatus]);
+  }, [api, pollScrapeStatus]);
 
   const handleScrape = useCallback(async () => {
     setScraping(true);
     setScrapingLogs([]);
     setScrapeAiProgress(null);
-    addToast('Scraping started in background. Logs will stream live...', 'info');
     try {
       const payload = {
         keywords: source.startsWith('karriere') ? karriereKeyword : keywords,
@@ -133,6 +136,8 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
       const res = await api.post('/scrape', payload);
       if (res.data.success && res.data.task_id) {
         setActiveScrapeTaskId(res.data.task_id);
+        setScrapeStatus(res.data.status);
+        addToast(res.data.status === 'queued' ? 'Scraping queued. It will start when a worker is available.' : 'Scraping started in background.', 'info');
         if (scrapePollInterval.current) clearInterval(scrapePollInterval.current);
         scrapePollInterval.current = setInterval(() => pollScrapeStatus(res.data.task_id), 1500);
       } else {
@@ -140,19 +145,20 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
         addToast('Failed to start scrape.', 'error');
         fetchLogs();
       }
-    } catch {
-      addToast('Scraping submission failed.', 'error');
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      addToast(typeof detail === 'string' ? detail : 'Scraping submission failed.', 'error');
       setScraping(false);
       fetchLogs();
     }
-  }, [source, karriereKeyword, keywords, resultsLimit, hoursOld, distance, addToast, fetchLogs, pollScrapeStatus]);
+  }, [addToast, source, karriereKeyword, keywords, resultsLimit, hoursOld, distance, api, pollScrapeStatus, fetchLogs]);
 
   const pollReprocessStatus = useCallback(async (taskId) => {
     try {
       const res = await api.get(`/reprocess/status/${taskId}`);
-      const { status, processed, total, failed } = res.data;
-      setReprocessProgress({ status, processed, total, failed });
-      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      const { status, stage, processed, total, failed, result } = res.data;
+      setReprocessProgress({ status, stage, processed, total, failed });
+      if (['completed', 'failed', 'cancelled', 'interrupted'].includes(status)) {
         clearInterval(reprocessPollInterval.current);
         reprocessPollInterval.current = null;
         setReprocessTaskId(null);
@@ -164,7 +170,7 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
         } else if (status === 'cancelled') {
           addToast('Job analysis cancelled.', 'info');
         } else {
-          addToast('Job analysis task failed.', 'error');
+          addToast(result?.message || 'Job analysis task failed.', 'error');
         }
       }
     } catch (err) {
@@ -175,7 +181,7 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
         setReprocessProgress(null);
       }
     }
-  }, [fetchJobs, fetchUnprocessedJobs, addToast]);
+  }, [api, fetchJobs, fetchUnprocessedJobs, addToast]);
 
   const checkActiveReprocess = useCallback(async () => {
     try {
@@ -189,24 +195,26 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
     } catch (err) {
       console.error('Failed to check active reprocess', err);
     }
-  }, [pollReprocessStatus]);
+  }, [api, pollReprocessStatus]);
 
-  const handleStartReprocess = useCallback(async () => {
+  const handleStartReprocess = useCallback(async (jobId = null) => {
     try {
-      const res = await api.post('/reprocess');
+      const query = typeof jobId === 'string' ? `?job_id=${encodeURIComponent(jobId)}` : '';
+      const res = await api.post(`/reprocess${query}`);
       if (res.data.task_id) {
         setReprocessTaskId(res.data.task_id);
-        setReprocessProgress({ status: 'running', processed: 0, total: res.data.total, failed: 0 });
+        setReprocessProgress({ status: res.data.status, stage: res.data.stage, processed: 0, total: res.data.total, failed: 0 });
         if (reprocessPollInterval.current) clearInterval(reprocessPollInterval.current);
         reprocessPollInterval.current = setInterval(() => pollReprocessStatus(res.data.task_id), 2000);
-        addToast(`AI analysis started for ${res.data.total} jobs…`, 'info');
+        addToast(`AI analysis ${res.data.status === 'queued' ? 'queued' : 'started'} for ${res.data.total} jobs…`, 'info');
       } else {
         addToast(res.data.message || 'No unprocessed jobs.', 'info');
       }
-    } catch {
-      addToast('Failed to start reprocessing.', 'error');
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      addToast(typeof detail === 'string' ? detail : 'Failed to start reprocessing.', 'error');
     }
-  }, [addToast, pollReprocessStatus]);
+  }, [addToast, api, pollReprocessStatus]);
 
   // These callbacks perform the initial remote-state synchronization for this hook.
   useEffect(() => {
@@ -227,6 +235,7 @@ export function useScraper({ user, addToast, fetchJobs, scraperConfig }) {
     scrapeLogs,
     activeScrapeTaskId,
     scrapeAiProgress,
+    scrapeStatus,
     keywords, setKeywords,
     karriereKeyword, setKarriereKeyword,
     resultsLimit, setResultsLimit,

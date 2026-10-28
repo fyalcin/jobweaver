@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings, RefreshCw, Search, AlertCircle, CheckCircle2, ChevronDown, Info } from 'lucide-react';
 import { AiTaskProgress } from '../AiTaskProgress';
-import { formatDateDisplay } from '../../constants/dates';
+import { formatDateDisplay, formatDateTimeDisplay } from '../../constants/dates';
 
 export function ScraperTab({
   source, setSource,
@@ -12,7 +12,7 @@ export function ScraperTab({
   distance, setDistance,
   scraping, handleScrape,
   unprocessedJobs, reprocessTaskId, reprocessProgress, handleStartReprocess,
-  activeScrapeTaskId, scrapeAiProgress, scrapeLogs, fetchLogs
+  activeScrapeTaskId, scrapeAiProgress, scrapeStatus, scrapeLogs, fetchLogs
 }) {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -104,7 +104,7 @@ export function ScraperTab({
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   {reprocessTaskId && reprocessProgress ? (
                     <span style={{ color: 'var(--text-primary)' }}>
-                      Processing with AI…{' '}
+                      {reprocessProgress.status === 'queued' ? 'Waiting for an available worker…' : 'Processing with AI…'}{' '}
                       <span style={{ color: '#f59e0b', fontWeight: 600 }}>{reprocessProgress.processed} / {reprocessProgress.total}</span>
                       {reprocessProgress.failed > 0 && (
                         <span style={{ color: 'var(--error-color)', marginLeft: '0.5rem' }}>({reprocessProgress.failed} failed)</span>
@@ -177,6 +177,7 @@ export function ScraperTab({
           {activeScrapeTaskId ? 'Live Scraping Logs' : 'Scraping Logs History'}
           {activeScrapeTaskId && <RefreshCw className="spinner" size={16} style={{ marginLeft: '0.5rem', opacity: 0.6 }} />}
         </h2>
+        {activeScrapeTaskId && scrapeStatus === 'queued' && <p>Scraping is queued, waiting for an available worker.</p>}
         {scrapeAiProgress && scrapeAiProgress.total > 0 && (
           <div style={{ marginBottom: '0.85rem' }}>
             <AiTaskProgress
@@ -198,7 +199,7 @@ export function ScraperTab({
                   borderBottom: '1px solid var(--border-color)', padding: '0.5rem 0',
                   color: log.level === 'warning' ? 'var(--warning-color)' : log.level === 'error' ? 'var(--danger-color)' : log.level === 'success' ? 'var(--success-color)' : 'inherit'
                 }}>
-                  <div style={{ opacity: 0.7, fontSize: '0.75rem', marginBottom: '2px' }}>{new Date(log.timestamp).toLocaleString()}</div>
+                  <div style={{ opacity: 0.7, fontSize: '0.75rem', marginBottom: '2px' }}>{formatDateTimeDisplay(log.timestamp)}</div>
                   <div>{log.message}</div>
                 </li>
               ))}

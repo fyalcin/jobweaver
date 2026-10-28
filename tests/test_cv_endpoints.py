@@ -15,11 +15,20 @@ import server  # noqa: E402
 import user_assets  # noqa: E402
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class CvEndpointsTest(unittest.TestCase):
     """GET/PUT /api/cv resolution + save-target behaviour.
 
     The repo-root CV-plaintext.txt is a user-agnostic placeholder template.
-    Reads fall back to it for any user without a personal CV; EVERY save
+    It is offered as a starting template, never used as a user's CV; EVERY save
     (default user included) writes profiles/<user>/CV-plaintext.txt and
     never touches the root template.
 
@@ -56,12 +65,14 @@ class CvEndpointsTest(unittest.TestCase):
             return f.read()
 
     # --- GET ---------------------------------------------------------------
-    def test_get_returns_base_template_for_user_without_personal_cv(self):
+    def test_user_without_personal_cv_gets_the_example_only_as_a_template(self):
         for u in (self._default_user(), self._wife()):
             res = server.get_cv(user=u)
-            self.assertEqual(res["content"], "ROOT CV")
-            self.assertTrue(res["exists"])
-            self.assertEqual(res["loaded_from"], "CV-plaintext.txt")
+            self.assertEqual(res["content"], "")
+            self.assertFalse(res["exists"])
+            self.assertEqual(res["template"], "ROOT CV")
+            self.assertEqual(res["missing_message"], server.NO_CV_MESSAGE)
+            self.assertEqual(user_assets.load_effective_cv(u["username"]), "")
 
     def test_get_save_path_points_at_user_profile(self):
         res = server.get_cv(user=self._default_user())

@@ -11,14 +11,14 @@ from job_policy import eligibility, qualifies
 
 class ExtractionValidationTest(unittest.TestCase):
     def analyze(self, **changes):
-        response = {'german_level': 'none', 'summary': 'Synthetic job', 'match_score': 80, **changes}
+        response = {'german_level': 'none', 'summary': 'Synthetic job', 'match_checks': [{'requirement': 'Synthetic skill', 'importance': 'must', 'posting_quote': 'Synthetic job', 'coverage': 'shown', 'cv_quote': 'Synthetic CV'}], **changes}
         with patch('scrapers.run_ai_prompt', return_value=json.dumps(response)):
             return scrapers.process_job_with_ai('Synthetic job with German preferred', 'Synthetic CV', denoise=False)
 
-    def test_bad_scores_and_shapes_rejected(self):
-        for value in (150, -1, True, '88', None):
-            with self.subTest(score=value), self.assertRaises(ValueError):
-                self.analyze(match_score=value)
+    def test_bad_checks_and_shapes_rejected(self):
+        for value in (None, True, 'checks', [42], [{'requirement': 'X'}]):
+            with self.subTest(checks=value), self.assertRaises(ValueError):
+                self.analyze(match_checks=value)
         with self.assertRaises(ValueError):
             self.analyze(match_analysis={'strengths': [42], 'gaps': 'oops'})
         with patch('scrapers.run_ai_prompt', return_value='{}'), self.assertRaises(ValueError):
@@ -26,7 +26,8 @@ class ExtractionValidationTest(unittest.TestCase):
 
     def test_tier_is_derived_and_raw_posting_retained(self):
         result = self.analyze(match_score=95, match_analysis={'tier': 'Reach'}, cleaned_description='Invented content ' * 50)
-        self.assertEqual(result['match_analysis']['tier'], 'Strong Match')
+        self.assertEqual(result['match_rating'], 'Great')
+        self.assertIsNone(result['match_score'])
         self.assertEqual(result['raw_description'], 'Synthetic job with German preferred')
         self.assertEqual(result['description'], result['raw_description'])
 
@@ -158,11 +159,11 @@ class PostingLifecycleTest(unittest.TestCase):
         (output / 'publication.json').write_text(json.dumps({'cv_url': '/api/download/Synthetic_daily/revisions/one/CV-Synthetic.pdf'}))
         config = {'auto_generate': {'min_match_score': 70, 'max_german_level': 'B1'}}
         record = {'id': 'daily', 'company': 'Synthetic', 'date_scraped': '2026-10-01', 'processed': 1,
-                  'match_score': 80, 'german_level': 'none', 'german_strength': 'none',
+                  'analysis_schema': 2, 'analysis_state': 'complete', 'match_rating': 'Great', 'match_checks': [{'requirement': 'Python', 'importance': 'must', 'posting_quote': 'Python required', 'coverage': 'shown', 'cv_quote': 'CV'}], 'german_level': 'none', 'german_strength': 'none',
                   'analysis_fingerprint': fingerprint('CV', 'mock')}
         db.upsert_job(record, user_id=1)
         # Pending null scores cause pandas to represent the validated score as 80.0.
-        db.upsert_job({**record, 'id': 'pending', 'match_score': None, 'processed': 0}, user_id=1)
+        db.upsert_job({**record, 'id': 'pending', 'match_score': None, 'match_rating': None, 'match_checks': [], 'analysis_schema': None, 'analysis_fingerprint': None, 'processed': 0}, user_id=1)
         with patch('server.load_user_config_dict', return_value=config), patch('server.load_cv_text', return_value='CV'), patch('server._effective_ai_model', return_value='mock'), patch('server.user_outputs_dir', return_value=self.temp.name):
             response = server.get_daily_results('2026-10-01', user=self.user)
             self.assertEqual([job['id'] for job in response['jobs']], ['daily'])

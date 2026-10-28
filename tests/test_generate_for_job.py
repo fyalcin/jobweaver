@@ -48,6 +48,17 @@ def _all_supported():
 
 
 @unittest.skipUnless(shutil.which('pdflatex') and shutil.which('pdfinfo'), 'Native LaTeX/Poppler prerequisites missing')
+
+
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class GenerateForJobTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -250,6 +261,16 @@ class GenerateForJobTest(unittest.TestCase):
         self.assertEqual(len(self.revisions()), 2)
 
     # --- failure ---------------------------------------------------------------------------------
+
+    def test_terminal_letter_failure_removes_atomic_cv_bundle(self):
+        from operation_budget import OperationExhausted
+        with patch('generators.run_ai_prompt', side_effect=OperationExhausted('Operation allowance exhausted')):
+            result, code = self.cli()
+        self.assertEqual(code, 1)
+        self.assertFalse(result['ok'])
+        self.assertEqual(self.revisions(), [])
+        self.assertFalse((self.output / 'publication.json').exists())
+        self.assertFalse((self.output / generate_for_job.GENERATION_FILE).exists())
 
     def test_failed_first_run_publishes_nothing(self):
         self.letters = ['not json at all']

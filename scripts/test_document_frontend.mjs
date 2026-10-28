@@ -20,10 +20,10 @@ let payload;
 const raw = fs.readFileSync('webapp/src/hooks/useBatchGen.js', 'utf8')
   .replace(/^import .*;$/gm, '')
   .replace('export function useBatchGen', 'function useBatchGen');
-const run = new Function('useState', 'useRef', 'useCallback', 'useEffect', 'api', 'setInterval', raw + '\nreturn useBatchGen;');
+const run = new Function('useState', 'useRef', 'useCallback', 'useEffect', 'useApi', 'setInterval', raw + '\nreturn useBatchGen;');
 let stateIndex = 0;
 const hook = run((initial) => [stateIndex++ === 3 ? true : initial, () => {}], (initial) => ({ current: initial }),
-  (callback) => callback, () => {}, { post: async (_, value) => { payload = value; return { data: {} }; } }, () => 1);
+  (callback) => callback, () => {}, () => ({ post: async (_, value) => { payload = value; return { data: {} }; } }), () => 1);
 const batch = hook({ aiModel: 'mock', aiTone: '', addToast: () => {}, filteredJobs: [{ id: 'synthetic' }], fetchJobs: () => {} });
 await batch.handleBatchGenerate(null, { engine: 'latex' });
 assert.deepEqual(payload.job_ids, ['synthetic']);
@@ -45,11 +45,11 @@ const useRef = (initial) => {
   if (!(slot in hooks)) hooks[slot] = { current: initial };
   return hooks[slot];
 };
-const jobFactory = new Function('useState', 'useRef', 'useCallback', 'useEffect', 'api',
+const jobFactory = new Function('useState', 'useRef', 'useCallback', 'useEffect', 'useApi',
   'compileTypstClient', 'uint8ArrayToBase64', 'downloadPdfBlob', jobHookSource + '\nreturn useJobStudio;');
-const useJob = jobFactory(useState, useRef, (callback) => callback, () => {}, {
+const useJob = jobFactory(useState, useRef, (callback) => callback, () => {}, () => ({
   post: () => new Promise((resolve) => { respond = resolve; }),
-}, () => {}, () => {}, () => {});
+}), () => {}, () => {}, () => {});
 const renderJob = (id) => { cursor = 0; return useJob(id, () => {}); };
 let studio = renderJob('old');
 studio.setCvTex('old source');
@@ -92,3 +92,64 @@ workers[1].onmessage({ data: { type: 'SUCCESS', id: workers[1].message.id, resul
 assert.equal((await c).result, 'fresh');
 client.terminateTypstWorker();
 console.log('Async regressions passed: job switching, edits during AI requests, worker timeout/recovery.');
+
+// A callback retained by an old workspace must never send a write as the new user.
+const { createAuthenticatedClient, advanceSession } = await import('../webapp/src/api/client.js');
+const firstUser = createAuthenticatedClient();
+let dispatched = 0;
+firstUser.api.defaults.adapter = async config => {
+  dispatched += 1;
+  return { data: {}, status: 200, statusText: 'OK', headers: {}, config };
+};
+await firstUser.api.post('/jobs/example', { status: 'interested' });
+advanceSession();
+await assert.rejects(firstUser.api.post('/jobs/example', { status: 'applied' }), /session changed/);
+assert.equal(dispatched, 1);
+firstUser.dispose();
+const secondUser = createAuthenticatedClient();
+secondUser.api.defaults.adapter = firstUser.api.defaults.adapter;
+await secondUser.api.get('/jobs');
+assert.equal(dispatched, 2);
+secondUser.dispose();
+await assert.rejects(secondUser.api.post('/jobs/example'), /session changed/);
+console.log('Session regressions passed: expired workspaces cannot dispatch later writes.');
+
+// Queued operations keep polling; interrupted operations stop and expose retry guidance.
+async function checkBackgroundHook(file, name, action, progressIndex) {
+  const text = fs.readFileSync(file, 'utf8').replace(/^import .*;$/gm, '')
+    .replace(`export function ${name}`, `function ${name}`);
+  const values = [], messages = [];
+  let index = 0, poll, cleared = 0, refreshed = 0;
+  let status = 'queued';
+  const factory = new Function('useState', 'useRef', 'useCallback', 'useEffect', 'useApi', 'setInterval', 'clearInterval', text + `\nreturn ${name};`);
+  const hook = factory(initial => {
+    const slot = index++;
+    values[slot] = initial;
+    return [initial, value => { values[slot] = value; }];
+  }, initial => ({ current: initial }), callback => callback, () => {}, () => ({
+    post: async () => ({ data: { success: true, task_id: 'queued-task', status: 'queued', stage: 'queued', total: 2 } }),
+    get: async path => ({ data: path.includes('/status/') ? {
+      status, stage: status, logs: [], processed: 0, total: 2, failed: 0,
+      result: { message: 'Interrupted. Retry explicitly.' },
+    } : path === '/jobs/unprocessed' ? { jobs: [] } : [] }),
+  }), callback => { poll = callback; return 1; }, () => { cleared += 1; });
+  const instance = hook({ user: { id: 1 }, aiTone: '', addToast: text => messages.push(text),
+    filteredJobs: [{ id: 'fictional' }], fetchJobs: () => { refreshed += 1; } });
+  await instance[action]();
+  if (progressIndex !== null) assert.equal(values[progressIndex].status, 'queued');
+  await poll();
+  assert.equal(cleared, 0);
+  status = 'interrupted';
+  await poll();
+  assert.equal(cleared, 1);
+  assert.equal(refreshed, 1);
+  assert(messages.includes('Interrupted. Retry explicitly.'));
+}
+await checkBackgroundHook('webapp/src/hooks/useBatchGen.js', 'useBatchGen', 'handleBatchGenerate', 1);
+await checkBackgroundHook('webapp/src/hooks/useScraper.js', 'useScraper', 'handleScrape', null);
+await checkBackgroundHook('webapp/src/hooks/useScraper.js', 'useScraper', 'handleStartReprocess', 13);
+console.log('Background regressions passed: queued polling and interrupted cleanup for all three operations.');
+
+await import('./test_ui_preferences.mjs');
+
+await import('./test_match_rating_frontend.mjs');

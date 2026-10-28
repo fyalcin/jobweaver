@@ -1,9 +1,11 @@
+from operation_budget import operation, check, OperationTerminated, QuotaExceeded
 import os
-from job_policy import qualifies, fingerprint
+from job_policy import qualifies, fingerprint, normalize_rating_config, apply_rating
 import sys
 import json
 import logging
 import argparse
+from input_limits import validate_collection_config, validate_daily_overrides
 import shutil
 from datetime import datetime
 import pandas as pd
@@ -29,7 +31,7 @@ def load_config(username: str | None = None) -> dict:
     cfg_path = resolve_user_path(username, "scraper_config.json")
     if os.path.exists(cfg_path):
         with open(cfg_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return normalize_rating_config(json.load(f))
     return {}
 
 def _document_engine(username: str | None, config: dict) -> str:
@@ -48,6 +50,7 @@ def _job_folder(job: dict) -> tuple:
     return safe_id, company, f'{company}_{safe_id}'
 
 
+@operation('documents')
 def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, user: dict, cv_profile: str | None = None, compact: bool | None = None, atomic: bool = False, notes: list | None = None, language: str | None = None) -> dict:
     """Generate the CV and cover letter of one job through the reviewed pipeline.
 
@@ -76,6 +79,7 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
     files, errors, built, created = [], [], {}, []
 
     def publish(entries):
+        check()
         publication = output / 'publication.json'
         previous = json.loads(publication.read_text()) if publication.exists() else {}
         for entry in entries:
@@ -86,7 +90,9 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
     with document_lock(draft):
         for kind, prefix in (('cv', 'cv'), ('letter', 'cl')):
             try:
+                check()
                 source = generate(job, cv_text, username, engine, kind, selection['profile'], model_name, run_ai_prompt, tone=tone, compact=compact and kind == 'cv', notes=notes, language=language)
+                check()
                 filename = f'{prefix}_{safe_id}.' + ('tex' if engine == 'latex' else 'typ')
                 atomic_write(draft / filename, source)
                 select_source(draft, prefix, safe_id, 'tex' if engine == 'latex' else 'typ')
@@ -118,6 +124,11 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
                 if not atomic:
                     publish([entry])
                 files.append(str(bundle / published_name))
+            except OperationTerminated:
+                if atomic:
+                    for bundle in created:
+                        shutil.rmtree(bundle, ignore_errors=True)
+                raise
             except Exception as exc:
                 errors.append(f'{kind}: {exc}')
                 logger.error('Document generation failed: %s', exc)
@@ -127,7 +138,12 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
                     shutil.rmtree(bundle, ignore_errors=True)
                 files, built = [], {}
             else:
-                publish(list(built.values()))
+                try:
+                    publish(list(built.values()))
+                except OperationTerminated:
+                    for bundle in created:
+                        shutil.rmtree(bundle, ignore_errors=True)
+                    raise
     return {'success': not errors, 'files': files, 'errors': errors, 'built': built, 'engine': engine,
             'folder': folder_name, 'output_dir': str(output)}
 
@@ -140,9 +156,12 @@ def run_daily_scraping(linkedin_limit: int = None, karriere_limit: int = None,
     keywords and its rows are stored under a distinct source label, while the other Sources are
     skipped, so the probe sample stays comparable to the main lane and does not pollute it.
     """
+    validate_daily_overrides(linkedin_limit, karriere_limit, keywords, source_tag)
     if demo_mode.enabled():
         logger.error(demo_mode.MESSAGE)
         return
+    import model_usage
+    model_usage.settings()  # Invalid quota settings stop the run before any User starts.
     logger.info("Starting daily job scraping routine.")
     users = db.list_users()
     if user_filter:
@@ -159,16 +178,21 @@ def run_daily_scraping(linkedin_limit: int = None, karriere_limit: int = None,
         try:
             _run_daily_for_user(user, linkedin_limit, karriere_limit,
                                 keywords=keywords, source_tag=source_tag)
+        except QuotaExceeded as e:
+            # One User's daily model quota never blocks the next User's run.
+            logger.warning(f"Daily run for user '{user.get('username')}' stopped: {e}")
         except Exception as e:
             logger.exception(f"Daily scraping failed for user '{user.get('username')}': {e}")
 
 
+@operation('collection', origin='scheduled')
 def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: int = None,
                         keywords: str = None, source_tag: str = None) -> None:
     username = user.get("username")
     user_id = user["id"]
     logger.info(f"=== Daily routine for user '{username}' ===")
-    config = load_config(username)
+    validate_daily_overrides(linkedin_limit, karriere_limit, keywords, source_tag)
+    config = validate_collection_config(load_config(username))
     today = datetime.now().strftime("%Y-%m-%d")
 
     # Scoring/analysis only — this model is passed to every scrape_new_jobs call below.
@@ -176,7 +200,6 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
     model_name = resolve_scrape_model(config)
 
     auto_cfg = config.get("auto_generate", {})
-    min_score = auto_cfg.get("min_match_score", 65)
     max_german_level = auto_cfg.get("max_german_level", "B1")
     tone = auto_cfg.get("tone", "professional")
 
@@ -197,7 +220,7 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
 
     cv_text = load_effective_cv(username)
     if not cv_text:
-        logger.error("CV-plaintext.txt not found or empty — match scores won't be calculated and doc generation will be skipped.")
+        logger.error("CV-plaintext.txt not found or empty — match ratings won't be calculated and doc generation will be skipped.")
 
     scrape_user = {"id": user_id, "username": username}
 
@@ -210,6 +233,7 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
     if enable_linkedin:
         li_keywords = keywords or li_cfg.get("keywords", "python OR backend developer")
         logger.info(f"Scraping LinkedIn via Apify (limit: {linkedin_limit})…")
+        check()
         scrape_new_jobs(ScrapeParams(
             results_limit=linkedin_limit,
             hours_old=li_cfg.get("hours_old", 24),
@@ -227,10 +251,11 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
         karriere_keywords = ka_cfg.get("keywords", ["python", "backend developer"])
         for kw in karriere_keywords:
             logger.info(f"Scraping Karriere.at [{karriere_source}] for '{kw}' (limit: {karriere_limit})…")
+            check()
             scrape_new_jobs(ScrapeParams(
                 results_limit=karriere_limit,
-                hours_old=ka_cfg.get("hours_old", 24),
-                distance=ka_cfg.get("distance", 10),
+                hours_old=ka_cfg.get("hours_old") or 24,
+                distance=ka_cfg.get("distance") or 10,
                 keywords=kw,
                 source=karriere_source,
             ), cv_text=cv_text, model_name=model_name or "z-ai/glm-5.3-flash", user=scrape_user)
@@ -251,6 +276,7 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
         per_keyword = max(1, int(lane.get("results_limit", 10)) // len(lane_keywords))
         for kw in lane_keywords:
             logger.info(f"Lane '{lane['name']}' [{lane.get('source', 'karriere-apify')}]: '{kw}' (limit: {per_keyword})…")
+            check()
             scrape_new_jobs(ScrapeParams(
                 results_limit=per_keyword,
                 hours_old=lane.get("hours_old", 24),
@@ -265,17 +291,19 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
     #     passes the filters, later runs only add new ones.
     if not probe and daily_cfg.get("company_feeds", {}).get("enabled", False):
         logger.info("Scraping company job feeds…")
+        check()
         scrape_new_jobs(ScrapeParams(source="company-feeds", keywords="company feeds"),
                         cv_text=cv_text, model_name=model_name or "z-ai/glm-5.3-flash", user=scrape_user)
 
     # 4. Retry analyses that failed recently. Without this, failures from
     #    earlier days stayed in the "pending AI analysis" queue indefinitely.
     if cv_text and not probe:
+        check()
         retried_ok, retried_failed = retry_failed_analyses(scrape_user, cv_text, model_name or "z-ai/glm-5.3-flash")
         if retried_ok or retried_failed:
             logger.info(f"Retried failed analyses: {retried_ok} succeeded, {retried_failed} still failing.")
 
-    # 5. Auto-generate documents for high-scoring jobs
+    # 5. Collect current qualifying ratings for the daily results
     jobs_today_df = db.load_jobs_by_date(user_id, today)
     if jobs_today_df.empty:
         logger.info("No new jobs scraped today.")
@@ -283,7 +311,7 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
 
     jobs_today_df = jobs_today_df.astype(object).where(pd.notna(jobs_today_df), None)
     jobs = jobs_today_df.to_dict(orient="records")
-    logger.info(f"Found {len(jobs)} jobs scraped today. Collecting jobs above score {min_score} "
+    logger.info(f"Found {len(jobs)} jobs scraped today. Collecting jobs rated at least {auto_cfg.get('min_rating', 'good')} "
                 f"for the daily results (document generation is on request, not here).")
 
     if not cv_text:
@@ -293,16 +321,11 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
 
     qualifying_jobs = []
     for job in jobs:
-        score = job.get("match_score")
-        try:
-            score_val = int(score) if score is not None else 0
-        except (ValueError, TypeError):
-            continue
-
+        apply_rating(job, config)
         if not qualifies(job, config, fingerprint(cv_text, model_name or "z-ai/glm-5.3-flash")):
             continue
 
-        logger.info(f"Qualifying job found: {job.get('title')} @ {job.get('company')} (score {score_val})")
+        logger.info(f"Qualifying job found: {job.get('title')} @ {job.get('company')} (rating {job.get('match_rating')})")
         qualifying_jobs.append(job)
 
     logger.info("Daily scrape complete: %s qualifying jobs.", len(qualifying_jobs))
@@ -319,5 +342,8 @@ if __name__ == "__main__":
                         help="PROBE run: value stored in the rows' source column (e.g. 'AI probe (LinkedIn)') so "
                              "probe rows are distinguishable from the main lane")
     args = parser.parse_args()
-    run_daily_scraping(args.linkedin_limit, args.karriere_limit,
-                       keywords=args.keywords, source_tag=args.source_tag, user_filter=args.user)
+    try:
+        run_daily_scraping(args.linkedin_limit, args.karriere_limit,
+                           keywords=args.keywords, source_tag=args.source_tag, user_filter=args.user)
+    except ValueError as exc:
+        parser.error(str(exc))

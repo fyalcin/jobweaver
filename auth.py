@@ -1,43 +1,14 @@
-"""auth.py — password hashing and signed session cookies (stdlib only).
-
-Passwords use PBKDF2-HMAC-SHA256 with a random salt. Sessions are stateless:
-an HMAC-signed `{user_id}.{expires}` token stored in an HttpOnly cookie.
-The signing secret lives in `.session_secret` (gitignored, auto-generated).
-"""
+"""Password hashing and revocable sessions. Only session-token hashes are stored."""
 
 import hashlib
 import hmac
-import os
+import re
 import secrets
 import time
-from user_assets import DATA_DIR
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SECRET_FILE = os.path.join(DATA_DIR, ".session_secret")
 
 SESSION_COOKIE_NAME = "gj_session"
 SESSION_TTL_SECONDS = 30 * 24 * 3600  # 30 days
-_PBKDF2_ITERATIONS = 200_000
-
-_secret_cache: bytes | None = None
-
-
-def _load_secret() -> bytes:
-    global _secret_cache
-    if _secret_cache is not None:
-        return _secret_cache
-    if os.path.exists(SECRET_FILE):
-        with open(SECRET_FILE, "rb") as f:
-            secret = f.read().strip()
-        if secret:
-            _secret_cache = secret
-            return _secret_cache
-    secret = secrets.token_hex(32).encode()
-    with open(SECRET_FILE, "wb") as f:
-        f.write(secret)
-    os.chmod(SECRET_FILE, 0o600)
-    _secret_cache = secret
-    return _secret_cache
+_PBKDF2_ITERATIONS = 600_000
 
 
 def hash_password(password: str) -> str:
@@ -50,32 +21,45 @@ def verify_password(password: str, stored: str | None) -> bool:
     if not stored or not password:
         return False
     try:
-        _, iterations, salt, expected = stored.split("$")
+        algorithm, iterations, salt, expected = stored.split("$")
+        if algorithm != 'pbkdf2_sha256' or not 1 <= int(iterations) <= 2_000_000:
+            return False
         digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(iterations))
         return hmac.compare_digest(digest.hex(), expected)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return False
 
 
-def create_session_token(user_id: int) -> str:
-    expires = int(time.time()) + SESSION_TTL_SECONDS
-    payload = f"{user_id}.{expires}"
-    sig = hmac.new(_load_secret(), payload.encode(), hashlib.sha256).hexdigest()
-    return f"{payload}.{sig}"
+def password_needs_upgrade(stored: str) -> bool:
+    return int(stored.split('$')[1]) < _PBKDF2_ITERATIONS
+
+
+def create_session_token(user_id: int, credential_hash=None) -> str:
+    import db
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    if not db.create_session(user_id, hashlib.sha256(token.encode()).hexdigest(),
+                             now + SESSION_TTL_SECONDS, now, credential_hash):
+        raise ValueError('Account credentials changed. Sign in again.')
+    return token
 
 
 def verify_session_token(token: str | None) -> int | None:
-    """Return the user_id encoded in a valid, unexpired token — else None."""
-    if not token:
+    if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
         return None
-    try:
-        user_id_part, expires_part, sig = token.split(".")
-        payload = f"{user_id_part}.{expires_part}"
-        expected = hmac.new(_load_secret(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected):
-            return None
-        if int(expires_part) < time.time():
-            return None
-        return int(user_id_part)
-    except (ValueError, TypeError):
-        return None
+    import db
+    return db.session_user(hashlib.sha256(token.encode()).hexdigest(), int(time.time()))
+
+
+def revoke_session_token(token: str | None) -> None:
+    if isinstance(token, str):
+        import db
+        db.revoke_session(hashlib.sha256(token.encode()).hexdigest())
+
+
+def reserve_login_attempt(username: str, address: str, now: int) -> int:
+    import db
+    def bucket(value):
+        return hashlib.sha256(value.encode()).hexdigest()
+    return db.reserve_login_attempt({bucket('peer:' + address): 30,
+                                     bucket('user-peer:' + username.strip().lower() + '\0' + address): 5}, now)

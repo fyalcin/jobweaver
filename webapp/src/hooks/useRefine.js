@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function useRefine({ aiTone, addToast, onJobsUpdated, onRefineFinished }) {
+  const api = useApi();
   const [refiningJob, setRefiningJob] = useState(null);
   const [refiningStatus, setRefiningStatus] = useState('idle');
   const [draftDocs, setDraftDocs] = useState({
@@ -54,7 +55,7 @@ export function useRefine({ aiTone, addToast, onJobsUpdated, onRefineFinished })
       setRefiningStatus('idle');
       setRefiningJob(null);
     }
-  }, [aiTone, addToast, onJobsUpdated, stampImageUrls]);
+  }, [addToast, api, aiTone, stampImageUrls, onJobsUpdated]);
 
   const iterateDocument = useCallback(async (docType) => {
     const feedback = docType === 'cv' ? feedbackCv : feedbackLetter;
@@ -87,7 +88,7 @@ export function useRefine({ aiTone, addToast, onJobsUpdated, onRefineFinished })
     } finally {
       setRefiningStatus('idle');
     }
-  }, [refiningJob, feedbackCv, feedbackLetter, draftDocs, aiTone, addToast, stampImageUrls]);
+  }, [feedbackCv, feedbackLetter, addToast, api, refiningJob, draftDocs.cv_tex, draftDocs.cl_tex, aiTone, stampImageUrls]);
 
   const generateDiffOriginal = useCallback(async (docType) => {
     const targetVersion = docType === 'cv' ? selectedCvVersion : selectedClVersion;
@@ -106,7 +107,7 @@ export function useRefine({ aiTone, addToast, onJobsUpdated, onRefineFinished })
     } finally {
       setRefiningStatus('idle');
     }
-  }, [refiningJob, selectedCvVersion, selectedClVersion, addToast, stampImageUrls]);
+  }, [selectedCvVersion, selectedClVersion, addToast, api, refiningJob, stampImageUrls]);
 
   const finalizeRefinements = useCallback(async () => {
     setRefiningStatus('finalizing');
@@ -123,7 +124,7 @@ export function useRefine({ aiTone, addToast, onJobsUpdated, onRefineFinished })
     } finally {
       setRefiningStatus('idle');
     }
-  }, [refiningJob, draftDocs, addToast, onRefineFinished]);
+  }, [addToast, api, refiningJob, draftDocs.cv_tex, draftDocs.cl_tex, onRefineFinished]);
 
   return {
     refiningJob, setRefiningJob,

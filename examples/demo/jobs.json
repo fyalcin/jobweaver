@@ -8,9 +8,9 @@
     "title": "Research Software Engineer",
     "location": "Graz, Austria",
     "source": "company-feeds",
-    "description": "Research Software Engineer at Cumulus Research\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 62,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Research Software Engineer at Cumulus Research\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing is required. You must investigate corrupted climate-model output. Experience preparing NetCDF datasets is required. A released Python package is a plus. English is the working language. German is not required.\n\nSalary\nEUR 62,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 0,
-    "match_score": 91,
+    "match_score": null,
     "status": "new",
     "german_level": "none",
     "requires_german": false,
@@ -24,9 +24,10 @@
       "Git"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Scientific Python",
+      "Dataset quality",
+      "NetCDF",
+      "Released packages"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -40,8 +41,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -68,7 +68,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Scientific Python",
+        "importance": "must",
+        "posting_quote": "Python for scientific data processing is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Dataset quality",
+        "importance": "must",
+        "posting_quote": "You must investigate corrupted climate-model output.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      },
+      {
+        "requirement": "NetCDF",
+        "importance": "must",
+        "posting_quote": "Experience preparing NetCDF datasets is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Released packages",
+        "importance": "nice",
+        "posting_quote": "A released Python package is a plus.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Research Software Engineer at Cumulus Research\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing is required. You must investigate corrupted climate-model output. Experience preparing NetCDF datasets is required. A released Python package is a plus. English is the working language. German is not required.\n\nSalary\nEUR 62,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_02",
@@ -79,9 +114,9 @@
     "title": "Python Data Engineer",
     "location": "Vienna, Austria",
     "source": "company-feeds",
-    "description": "Python Data Engineer at Brookline Data\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 66,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Python Data Engineer at Brookline Data\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython pipeline development is required. SQL database experience is required. Container-based data workflows are required. Published Python packages are a plus. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 66,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 1,
-    "match_score": 84,
+    "match_score": null,
     "status": "interview",
     "german_level": "B1",
     "requires_german": true,
@@ -95,9 +130,10 @@
       "Docker"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Python pipelines",
+      "SQL",
+      "Container workflows",
+      "Package releases"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -111,8 +147,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -139,7 +174,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Python pipelines",
+        "importance": "must",
+        "posting_quote": "Python pipeline development is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "SQL",
+        "importance": "must",
+        "posting_quote": "SQL database experience is required.",
+        "coverage": "related",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Container workflows",
+        "importance": "must",
+        "posting_quote": "Container-based data workflows are required.",
+        "coverage": "related",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Package releases",
+        "importance": "nice",
+        "posting_quote": "Published Python packages are a plus.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Python Data Engineer at Brookline Data\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython pipeline development is required. SQL database experience is required. Container-based data workflows are required. Published Python packages are a plus. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 66,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_03",
@@ -150,9 +220,9 @@
     "title": "Scientific Python Developer",
     "location": "Remote (Austria)",
     "source": "manual",
-    "description": "Scientific Python Developer at Rainfall Commons\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 60,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Scientific Python Developer at Rainfall Commons\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nYou must maintain a scientific Python library. Basic pytest unit tests are required. Experience processing scientific datasets is required. English is the working language. German is not required.\n\nSalary\nEUR 60,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 2,
-    "match_score": 89,
+    "match_score": null,
     "status": "applied",
     "german_level": "none",
     "requires_german": false,
@@ -166,9 +236,9 @@
       "packaging"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Python library maintenance",
+      "Unit testing",
+      "Scientific data"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -182,8 +252,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -210,7 +279,35 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Python library maintenance",
+        "importance": "must",
+        "posting_quote": "You must maintain a scientific Python library.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Unit testing",
+        "importance": "must",
+        "posting_quote": "Basic pytest unit tests are required.",
+        "coverage": "shown",
+        "cv_quote": "Basic unit tests with pytest for the package's core functions."
+      },
+      {
+        "requirement": "Scientific data",
+        "importance": "must",
+        "posting_quote": "Experience processing scientific datasets is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Scientific Python Developer at Rainfall Commons\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nYou must maintain a scientific Python library. Basic pytest unit tests are required. Experience processing scientific datasets is required. English is the working language. German is not required.\n\nSalary\nEUR 60,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_04",
@@ -221,9 +318,9 @@
     "title": "Climate Data Analyst",
     "location": "Graz, Austria",
     "source": "company-feeds",
-    "description": "Climate Data Analyst at Northwind Signals\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 58,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Climate Data Analyst at Northwind Signals\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nClimate-model data analysis is required. A degree in meteorology is required. Interactive dashboard development is required. Quality-control experience is a plus. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 58,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 3,
-    "match_score": 87,
+    "match_score": null,
     "status": "interested",
     "german_level": "B1",
     "requires_german": true,
@@ -236,9 +333,10 @@
       "statistics"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Climate analysis",
+      "Meteorology degree",
+      "Dashboard tools",
+      "Quality checks"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -252,8 +350,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -280,7 +377,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Climate analysis",
+        "importance": "must",
+        "posting_quote": "Climate-model data analysis is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Meteorology degree",
+        "importance": "must",
+        "posting_quote": "A degree in meteorology is required.",
+        "coverage": "shown",
+        "cv_quote": "MSc in Meteorology, University of Graz, 2019."
+      },
+      {
+        "requirement": "Dashboard tools",
+        "importance": "must",
+        "posting_quote": "Interactive dashboard development is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Quality checks",
+        "importance": "nice",
+        "posting_quote": "Quality-control experience is a plus.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Climate Data Analyst at Northwind Signals\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nClimate-model data analysis is required. A degree in meteorology is required. Interactive dashboard development is required. Quality-control experience is a plus. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 58,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_05",
@@ -291,9 +423,9 @@
     "title": "Junior Data Engineer",
     "location": "Linz, Austria",
     "source": "company-feeds",
-    "description": "Junior Data Engineer at Maple Circuit\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 52,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Junior Data Engineer at Maple Circuit\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython data-conversion scripts are required. Production SQL database design is required. Apache Airflow scheduling is required. Experience checking datasets is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 52,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 4,
-    "match_score": 76,
+    "match_score": null,
     "status": "new",
     "german_level": "B1",
     "requires_german": true,
@@ -306,9 +438,10 @@
       "pandas"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Python data conversion",
+      "Production SQL",
+      "Airflow",
+      "Dataset checks"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -322,8 +455,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Moderate",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -350,7 +482,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Python data conversion",
+        "importance": "must",
+        "posting_quote": "Python data-conversion scripts are required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Production SQL",
+        "importance": "must",
+        "posting_quote": "Production SQL database design is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Airflow",
+        "importance": "must",
+        "posting_quote": "Apache Airflow scheduling is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Dataset checks",
+        "importance": "must",
+        "posting_quote": "Experience checking datasets is required.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Junior Data Engineer at Maple Circuit\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython data-conversion scripts are required. Production SQL database design is required. Apache Airflow scheduling is required. Experience checking datasets is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 52,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_06",
@@ -361,9 +528,9 @@
     "title": "Environmental Data Scientist",
     "location": "Vienna, Austria",
     "source": "manual",
-    "description": "Environmental Data Scientist at Cloudbank Analytics\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 64,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Environmental Data Scientist at Cloudbank Analytics\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nYou must process environmental datasets. Maintaining statistical software is required. Deep-learning model training is required. Cloud machine-learning deployment is required. Commercial product experimentation is required. English is the working language. German is not required.\n\nSalary\nEUR 64,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 5,
-    "match_score": 81,
+    "match_score": null,
     "status": "applied",
     "german_level": "none",
     "requires_german": false,
@@ -376,9 +543,11 @@
       "climate modelling"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Environmental datasets",
+      "Statistical packages",
+      "Deep learning",
+      "Cloud ML",
+      "Product experiments"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -392,8 +561,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -420,7 +588,49 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Environmental datasets",
+        "importance": "must",
+        "posting_quote": "You must process environmental datasets.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Statistical packages",
+        "importance": "must",
+        "posting_quote": "Maintaining statistical software is required.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Deep learning",
+        "importance": "must",
+        "posting_quote": "Deep-learning model training is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Cloud ML",
+        "importance": "must",
+        "posting_quote": "Cloud machine-learning deployment is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Product experiments",
+        "importance": "must",
+        "posting_quote": "Commercial product experimentation is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Environmental Data Scientist at Cloudbank Analytics\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nYou must process environmental datasets. Maintaining statistical software is required. Deep-learning model training is required. Cloud machine-learning deployment is required. Commercial product experimentation is required. English is the working language. German is not required.\n\nSalary\nEUR 64,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_07",
@@ -431,9 +641,9 @@
     "title": "Senior Platform Engineer",
     "location": "Vienna, Austria",
     "source": "company-feeds",
-    "description": "Senior Platform Engineer at Silverfern Systems\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B2 is required.\n\nSalary\nEUR 82,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Senior Platform Engineer at Silverfern Systems\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nKubernetes cluster administration is required. Production service ownership is required. Previous on-call incident response is required. Python scripting is required. English is the working language. German B2 is required.\n\nSalary\nEUR 82,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 6,
-    "match_score": 41,
+    "match_score": null,
     "status": "not_interested",
     "german_level": "B2",
     "requires_german": true,
@@ -446,9 +656,10 @@
       "Go"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Kubernetes",
+      "Service operations",
+      "On-call",
+      "Python scripting"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -462,8 +673,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Low",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -490,7 +700,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Kubernetes",
+        "importance": "must",
+        "posting_quote": "Kubernetes cluster administration is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Service operations",
+        "importance": "must",
+        "posting_quote": "Production service ownership is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "On-call",
+        "importance": "must",
+        "posting_quote": "Previous on-call incident response is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Python scripting",
+        "importance": "must",
+        "posting_quote": "Python scripting is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Senior Platform Engineer at Silverfern Systems\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nKubernetes cluster administration is required. Production service ownership is required. Previous on-call incident response is required. Python scripting is required. English is the working language. German B2 is required.\n\nSalary\nEUR 82,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_08",
@@ -501,9 +746,9 @@
     "title": "Research Data Steward",
     "location": "Innsbruck, Austria",
     "source": "company-feeds",
-    "description": "Research Data Steward at Morrow Observatory\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 56,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Research Data Steward at Morrow Observatory\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific dataset stewardship is required. Formal metadata-standard implementation is required. Supporting researchers is required. Data quality control is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 56,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.\nWeekly travel to client sites is expected.",
     "days_ago": 0,
-    "match_score": 78,
+    "match_score": null,
     "status": "new",
     "german_level": "B1",
     "requires_german": true,
@@ -516,9 +761,10 @@
       "scientific data"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Scientific data stewardship",
+      "Metadata standards",
+      "Research collaboration",
+      "Quality control"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -532,8 +778,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Moderate",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -560,7 +805,49 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Scientific data stewardship",
+        "importance": "must",
+        "posting_quote": "Scientific dataset stewardship is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Metadata standards",
+        "importance": "must",
+        "posting_quote": "Formal metadata-standard implementation is required.",
+        "coverage": "related",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Research collaboration",
+        "importance": "must",
+        "posting_quote": "Supporting researchers is required.",
+        "coverage": "shown",
+        "cv_quote": "Supervised two bachelor theses on precipitation statistics."
+      },
+      {
+        "requirement": "Quality control",
+        "importance": "must",
+        "posting_quote": "Data quality control is required.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      }
+    ],
+    "preference_conflicts": [
+      {
+        "preference": "Travel",
+        "notes_quote": "I prefer roles without regular travel.",
+        "posting_quote": "Weekly travel to client sites is expected.",
+        "severity": "soft"
+      }
+    ],
+    "raw_description": "Research Data Steward at Morrow Observatory\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific dataset stewardship is required. Formal metadata-standard implementation is required. Supporting researchers is required. Data quality control is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 56,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.\nWeekly travel to client sites is expected.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_09",
@@ -571,9 +858,9 @@
     "title": "Python Developer",
     "location": "Graz, Austria",
     "source": "manual",
-    "description": "Python Developer at Pebblegrid Labs\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 59,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Python Developer at Pebblegrid Labs\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython module development is required. GitHub Actions workflow maintenance is required. Production HTTP API implementation is required. English is the working language. German is not required.\n\nSalary\nEUR 59,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 1,
-    "match_score": 80,
+    "match_score": null,
     "status": "offer",
     "german_level": "none",
     "requires_german": false,
@@ -586,9 +873,9 @@
       "data processing"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Python modules",
+      "GitHub workflows",
+      "HTTP APIs"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -602,8 +889,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -630,7 +916,35 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Python modules",
+        "importance": "must",
+        "posting_quote": "Python module development is required.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "GitHub workflows",
+        "importance": "must",
+        "posting_quote": "GitHub Actions workflow maintenance is required.",
+        "coverage": "related",
+        "cv_quote": "Basic unit tests with pytest for the package's core functions."
+      },
+      {
+        "requirement": "HTTP APIs",
+        "importance": "must",
+        "posting_quote": "Production HTTP API implementation is required.",
+        "coverage": "related",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Python Developer at Pebblegrid Labs\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython module development is required. GitHub Actions workflow maintenance is required. Production HTTP API implementation is required. English is the working language. German is not required.\n\nSalary\nEUR 59,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_10",
@@ -641,9 +955,9 @@
     "title": "Analytics Engineer",
     "location": "Vienna, Austria",
     "source": "company-feeds",
-    "description": "Analytics Engineer at Amberline Metrics\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Analytics Engineer at Amberline Metrics\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nSQL transformation modelling is required. Production dbt project experience is required. Cloud warehouse schema design is required. Python data analysis is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 2,
-    "match_score": 67,
+    "match_score": null,
     "status": "rejected",
     "german_level": "B1",
     "requires_german": true,
@@ -656,9 +970,10 @@
       "Python"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "SQL transformations",
+      "dbt",
+      "Warehouse design",
+      "Python analysis"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -672,8 +987,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Moderate",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -700,7 +1014,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "SQL transformations",
+        "importance": "must",
+        "posting_quote": "SQL transformation modelling is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "dbt",
+        "importance": "must",
+        "posting_quote": "Production dbt project experience is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Warehouse design",
+        "importance": "must",
+        "posting_quote": "Cloud warehouse schema design is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Python analysis",
+        "importance": "must",
+        "posting_quote": "Python data analysis is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Analytics Engineer at Amberline Metrics\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nSQL transformation modelling is required. Production dbt project experience is required. Cloud warehouse schema design is required. Python data analysis is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_11",
@@ -711,9 +1060,9 @@
     "title": "Forecast Verification Scientist",
     "location": "Remote (Austria)",
     "source": "company-feeds",
-    "description": "Forecast Verification Scientist at Bluegrove Forecasts\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 63,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Forecast Verification Scientist at Bluegrove Forecasts\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPrecipitation return-period statistics are required. Meteorology training is required. Climate-model quality checks are required. Student supervision is a plus. English is the working language. German is not required.\n\nSalary\nEUR 63,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 3,
-    "match_score": 88,
+    "match_score": null,
     "status": "interested",
     "german_level": "none",
     "requires_german": false,
@@ -726,9 +1075,10 @@
       "NetCDF"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Forecast statistics",
+      "Meteorology",
+      "Model checks",
+      "Supervision"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -742,8 +1092,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -770,7 +1119,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Forecast statistics",
+        "importance": "must",
+        "posting_quote": "Precipitation return-period statistics are required.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Meteorology",
+        "importance": "must",
+        "posting_quote": "Meteorology training is required.",
+        "coverage": "shown",
+        "cv_quote": "MSc in Meteorology, University of Graz, 2019."
+      },
+      {
+        "requirement": "Model checks",
+        "importance": "must",
+        "posting_quote": "Climate-model quality checks are required.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      },
+      {
+        "requirement": "Supervision",
+        "importance": "nice",
+        "posting_quote": "Student supervision is a plus.",
+        "coverage": "shown",
+        "cv_quote": "Supervised two bachelor theses on precipitation statistics."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Forecast Verification Scientist at Bluegrove Forecasts\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPrecipitation return-period statistics are required. Meteorology training is required. Climate-model quality checks are required. Student supervision is a plus. English is the working language. German is not required.\n\nSalary\nEUR 63,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_12",
@@ -781,9 +1165,9 @@
     "title": "Frontend Engineer",
     "location": "Vienna, Austria",
     "source": "manual",
-    "description": "Frontend Engineer at Lattice Orchard\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B2 is required.\n\nSalary\nEUR 65,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Frontend Engineer at Lattice Orchard\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nProfessional React development is required. Production TypeScript experience is required. Web accessibility audits are required. Unit-testing experience is required. English is the working language. German B2 is required.\n\nSalary\nEUR 65,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 4,
-    "match_score": 28,
+    "match_score": null,
     "status": "not_interested",
     "german_level": "B2",
     "requires_german": true,
@@ -796,9 +1180,10 @@
       "CSS"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "React",
+      "TypeScript",
+      "Accessibility",
+      "Unit tests"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -812,8 +1197,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Low",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -840,7 +1224,42 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "React",
+        "importance": "must",
+        "posting_quote": "Professional React development is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "TypeScript",
+        "importance": "must",
+        "posting_quote": "Production TypeScript experience is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Accessibility",
+        "importance": "must",
+        "posting_quote": "Web accessibility audits are required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      },
+      {
+        "requirement": "Unit tests",
+        "importance": "must",
+        "posting_quote": "Unit-testing experience is required.",
+        "coverage": "related",
+        "cv_quote": "Basic unit tests with pytest for the package's core functions."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Frontend Engineer at Lattice Orchard\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nProfessional React development is required. Production TypeScript experience is required. Web accessibility audits are required. Unit-testing experience is required. English is the working language. German B2 is required.\n\nSalary\nEUR 65,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_13",
@@ -851,9 +1270,9 @@
     "title": "Energy Data Analyst",
     "location": "Linz, Austria",
     "source": "company-feeds",
-    "description": "Energy Data Analyst at Riverglass Energy\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 57,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Energy Data Analyst at Riverglass Energy\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific time-series processing is required. Python dataset preparation is required. Austrian energy-market expertise is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 57,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 5,
-    "match_score": 73,
+    "match_score": null,
     "status": "new",
     "german_level": "B1",
     "requires_german": true,
@@ -866,9 +1285,9 @@
       "SQL"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Time series",
+      "Python",
+      "Energy markets"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -882,8 +1301,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Moderate",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -910,7 +1328,35 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Time series",
+        "importance": "must",
+        "posting_quote": "Scientific time-series processing is required.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Python",
+        "importance": "must",
+        "posting_quote": "Python dataset preparation is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Energy markets",
+        "importance": "must",
+        "posting_quote": "Austrian energy-market expertise is required.",
+        "coverage": "missing",
+        "cv_quote": ""
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Energy Data Analyst at Riverglass Energy\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific time-series processing is required. Python dataset preparation is required. Austrian energy-market expertise is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 57,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_14",
@@ -921,9 +1367,9 @@
     "title": "Scientific Software Maintainer",
     "location": "Graz, Austria",
     "source": "company-feeds",
-    "description": "Scientific Software Maintainer at Dawntrail Science\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for scientific data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German is not required.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Scientific Software Maintainer at Dawntrail Science\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython package release management is required. Basic automated regression checks are required. Experience supporting scientific users is required. English is the working language. German is not required.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
     "days_ago": 6,
-    "match_score": 85,
+    "match_score": null,
     "status": "applied",
     "german_level": "none",
     "requires_german": false,
@@ -937,9 +1383,9 @@
       "pytest"
     ],
     "requirements": [
-      "Python for scientific data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "Python releases",
+      "Regression checks",
+      "Scientific users"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -953,8 +1399,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Strong",
-      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. This score is an illustrative demo value.",
+      "synthesis": "Alex’s climate-data scripts and released Python package connect directly to the role. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -981,7 +1426,35 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "Python releases",
+        "importance": "must",
+        "posting_quote": "Python package release management is required.",
+        "coverage": "shown",
+        "cv_quote": "Main developer of rainfall-stats, released on PyPI with three releases."
+      },
+      {
+        "requirement": "Regression checks",
+        "importance": "must",
+        "posting_quote": "Basic automated regression checks are required.",
+        "coverage": "related",
+        "cv_quote": "Basic unit tests with pytest for the package's core functions."
+      },
+      {
+        "requirement": "Scientific users",
+        "importance": "must",
+        "posting_quote": "Experience supporting scientific users is required.",
+        "coverage": "shown",
+        "cv_quote": "Supervised two bachelor theses on precipitation statistics."
+      }
+    ],
+    "preference_conflicts": [],
+    "raw_description": "Scientific Software Maintainer at Dawntrail Science\n\nThis is a fictional posting for the Jobweaver demo. Maintain reproducible climate data tools for a small research team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython package release management is required. Basic automated regression checks are required. Experience supporting scientific users is required. English is the working language. German is not required.\n\nSalary\nEUR 61,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   },
   {
     "id": "demo_15",
@@ -992,9 +1465,9 @@
     "title": "Technical Data Specialist",
     "location": "Salzburg, Austria",
     "source": "manual",
-    "description": "Technical Data Specialist at Mossfield Instruments\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nPython for data processing. Experience cleaning and checking datasets. Version control with Git. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 54,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.",
+    "description": "Technical Data Specialist at Mossfield Instruments\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific file conversion is required. Data-quality triage is required. Commercial customer-support experience is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 54,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.\nFive days on site in Vienna are required.",
     "days_ago": 0,
-    "match_score": 70,
+    "match_score": null,
     "status": "new",
     "german_level": "B1",
     "requires_german": true,
@@ -1007,9 +1480,9 @@
       "quality control"
     ],
     "requirements": [
-      "Python for data processing",
-      "Experience cleaning and checking datasets",
-      "Version control with Git"
+      "File conversions",
+      "Data triage",
+      "Customer support"
     ],
     "tasks": [
       "Prepare and validate datasets",
@@ -1023,8 +1496,7 @@
     "experience_years": "2+ years",
     "education_level": "Degree in a quantitative subject",
     "match_analysis": {
-      "tier": "Moderate",
-      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. This score is an illustrative demo value.",
+      "synthesis": "Alex’s data preparation work transfers to this role, with gaps in production tooling. The rating uses prepared fictional evidence; no live model ran.",
       "strengths": [
         {
           "title": "Python data preparation",
@@ -1051,6 +1523,41 @@
           "detail": "Describe pytest experience as basic tests, as stated in the career record."
         }
       ]
-    }
+    },
+    "match_checks": [
+      {
+        "requirement": "File conversions",
+        "importance": "must",
+        "posting_quote": "Scientific file conversion is required.",
+        "coverage": "shown",
+        "cv_quote": "Wrote Python scripts that convert 40 TB of model output into analysis-ready NetCDF files."
+      },
+      {
+        "requirement": "Data triage",
+        "importance": "must",
+        "posting_quote": "Data-quality triage is required.",
+        "coverage": "shown",
+        "cv_quote": "Adapted an existing quality-control tool to flag corrupted model runs before analysis."
+      },
+      {
+        "requirement": "Customer support",
+        "importance": "must",
+        "posting_quote": "Commercial customer-support experience is required.",
+        "coverage": "related",
+        "cv_quote": "Supervised two bachelor theses on precipitation statistics."
+      }
+    ],
+    "preference_conflicts": [
+      {
+        "preference": "Work location",
+        "notes_quote": "I will only consider hybrid or remote roles.",
+        "posting_quote": "Five days on site in Vienna are required.",
+        "severity": "hard"
+      }
+    ],
+    "raw_description": "Technical Data Specialist at Mossfield Instruments\n\nThis is a fictional posting for the Jobweaver demo. Prepare and validate datasets used by an analytics team.\n\nTasks\nConvert incoming files into documented datasets. Investigate quality issues and explain the results to colleagues. Maintain Python scripts and review small changes with the team.\n\nRequirements\nScientific file conversion is required. Data-quality triage is required. Commercial customer-support experience is required. English is the working language. German B1 is required for team communication.\n\nSalary\nEUR 54,000 gross per year. Hybrid working by agreement. Applications shown in this demo are fictional.\nFive days on site in Vienna are required.",
+    "analysis_schema": 2,
+    "grounding_status": "verified",
+    "grounding_issues": []
   }
 ]

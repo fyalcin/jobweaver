@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs }) {
+  const api = useApi();
   const [batchGenTaskId, setBatchGenTaskId] = useState(null);
   const [batchGenProgress, setBatchGenProgress] = useState(null);
   const [batchGenSubmitting, setBatchGenSubmitting] = useState(false);
@@ -11,9 +12,9 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
   const pollBatchGenStatus = useCallback(async (taskId) => {
     try {
       const res = await api.get(`/generate/batch/status/${taskId}`);
-      const { status, processed, total, failed } = res.data;
-      setBatchGenProgress({ status, processed, total, failed });
-      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      const { status, stage, processed, total, failed, result } = res.data;
+      setBatchGenProgress({ status, stage, processed, total, failed });
+      if (['completed', 'failed', 'cancelled', 'interrupted'].includes(status)) {
         clearInterval(batchGenPollInterval.current);
         batchGenPollInterval.current = null;
         setBatchGenTaskId(null);
@@ -29,7 +30,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
         } else if (status === 'cancelled') {
           addToast('Batch document generation cancelled.', 'info');
         } else {
-          addToast('Batch document generation failed.', 'error');
+          addToast(result?.message || 'Batch document generation failed.', 'error');
         }
       }
     } catch (err) {
@@ -40,7 +41,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
         setBatchGenProgress(null);
       }
     }
-  }, [fetchJobs, addToast]);
+  }, [api, fetchJobs, addToast]);
 
   const checkActiveBatchGenerate = useCallback(async () => {
     try {
@@ -49,6 +50,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
         setBatchGenTaskId(res.data.task_id);
         setBatchGenProgress({
           status: res.data.status,
+          stage: res.data.stage,
           processed: res.data.processed,
           total: res.data.total,
           failed: res.data.failed,
@@ -59,7 +61,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
     } catch (err) {
       console.error('Failed to check active batch generate', err);
     }
-  }, [pollBatchGenStatus]);
+  }, [api, pollBatchGenStatus]);
 
   useEffect(() => {
     if (!user) return;
@@ -86,10 +88,10 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
       const res = await api.post('/generate/batch', payload);
       if (res.data.task_id) {
         setBatchGenTaskId(res.data.task_id);
-        setBatchGenProgress({ status: 'running', processed: 0, total: res.data.total, failed: 0 });
+        setBatchGenProgress({ status: res.data.status, stage: res.data.stage, processed: 0, total: res.data.total, failed: 0 });
         if (batchGenPollInterval.current) clearInterval(batchGenPollInterval.current);
         batchGenPollInterval.current = setInterval(() => pollBatchGenStatus(res.data.task_id), 2000);
-        addToast(`${toastLabel} started for ${res.data.total} job${res.data.total !== 1 ? 's' : ''}…`, 'info');
+        addToast(`${toastLabel} ${res.data.status === 'queued' ? 'queued' : 'started'} for ${res.data.total} job${res.data.total !== 1 ? 's' : ''}…`, 'info');
       }
     } catch (err) {
       const d = err.response?.data?.detail;
@@ -97,7 +99,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
     } finally {
       setBatchGenSubmitting(false);
     }
-  }, [aiTone, batchCompact, addToast, pollBatchGenStatus]);
+  }, [addToast, aiTone, batchCompact, api, pollBatchGenStatus]);
 
   const handleBatchGenerate = useCallback(async (selectedTargets = null, options = {}) => {
     // Guard against being used as a raw onClick handler (React passes the
@@ -123,7 +125,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
     } catch {
       addToast('Failed to cancel batch.', 'error');
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   return {
     batchGenTaskId,

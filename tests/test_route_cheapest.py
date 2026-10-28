@@ -17,6 +17,15 @@ import server  # noqa: E402
 import generators  # noqa: E402
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class ApplyRouteCheapestTest(unittest.TestCase):
     def test_appends_floor_when_enabled(self):
         self.assertEqual(generators.apply_route_cheapest("openai/gpt-5.6-luna", True), "openai/gpt-5.6-luna:floor")

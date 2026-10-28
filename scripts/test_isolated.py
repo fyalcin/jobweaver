@@ -51,7 +51,8 @@ dotenv.load_dotenv = lambda *args, **kwargs: False
                 if binary.is_file() and os.access(binary, os.X_OK):
                     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
                     break
-        env.update(GIMME_ISOLATED_TESTS="1", PYTHONPATH=str(scratch), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(scratch))
+        env.update(GIMME_ISOLATED_TESTS="1", PYTHONPATH=str(scratch), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(scratch),
+                   JOBWEAVER_ALLOWED_HOSTS='testserver', JOBWEAVER_HTTPS_ONLY='0')
         # Direct installed interpreter avoids uv downloads or resolver writes.
         result = subprocess.run([sys.executable, "-m", "unittest", "discover", "tests", *sys.argv[1:]],
                                 cwd=scratch, env=env)

@@ -24,7 +24,7 @@ data = Path(sys.argv[1])
 seed(data)
 import auth, db, server
 from fastapi.testclient import TestClient
-assert Path(auth.SECRET_FILE).parent == data
+assert Path(db.DB_PATH).parent == data
 assert len(db.list_users()) == 2
 assert db.get_user_by_username('admin')['password_hash'] is None
 client = TestClient(server.app)
@@ -40,7 +40,7 @@ def snapshot():
     return {str(p.relative_to(data)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in data.rglob('*') if p.is_file() and not p.name.endswith(('-wal', '-shm'))}
 before = snapshot()
-with patch('subprocess.run', side_effect=AssertionError('Demo read called a compiler')), patch('urllib.request.urlopen', side_effect=AssertionError('Demo read used network')):
+with patch('subprocess.run', side_effect=AssertionError('Demo read called a compiler')), patch('subprocess.Popen', side_effect=AssertionError('Demo read started a process')), patch('urllib.request.urlopen', side_effect=AssertionError('Demo read used network')):
     for path in ('/api/jobs/summaries', '/api/stats', '/api/stats/skills', '/api/daily-results',
                  '/api/cv', '/api/preferences', '/api/config', '/api/openrouter/models', '/api/documents'):
         response = client.get(path)

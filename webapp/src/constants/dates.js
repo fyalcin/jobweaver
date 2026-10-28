@@ -11,3 +11,13 @@ export function formatDateDisplay(dateStr, fallback = '-') {
   }
   return dateStr;
 }
+
+export function formatDateTimeDisplay(ts, fallback = '-') {
+  if (!ts || ts === '-' || ts === '—') return fallback;
+  const m = String(ts).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (m) {
+    const [, yyyy, mm, dd, hh, min] = m;
+    return `${dd}.${mm}.${yyyy}, ${hh}:${min}`;
+  }
+  return formatDateDisplay(ts, fallback);
+}

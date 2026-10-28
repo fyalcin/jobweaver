@@ -8,6 +8,9 @@ eliminating the circular dependency that previously existed.
 import json
 import logging
 import os
+from input_limits import ScrapeInput, ShortText, SourceLabel, validate_collection_config
+from pydantic import TypeAdapter
+from itertools import islice
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Callable
@@ -17,12 +20,13 @@ from dotenv import load_dotenv
 
 import db
 import demo_mode
+from operation_budget import operation, current, check, OperationTerminated
 import postings
 from german import normalize_german_level, requires_german
 from salary import parse_salary_yearly, salary_yearly_eur
 from generators import AIContentFilterError, AITruncatedError, run_ai_prompt
 from user_assets import resolve_user_path
-from job_policy import tier, fingerprint, analysis_response_format, description_incomplete
+from job_policy import match_rating, judgement_calls, fingerprint, analysis_response_format, description_incomplete
 from analysis_validation import AnalysisValidationError, validate_extraction, save_failure
 
 load_dotenv()
@@ -233,7 +237,7 @@ def _filter_by_posted_age(df: "pd.DataFrame", hours_old: int, log_fn: Callable) 
 
 
 # ---------------------------------------------------------------------------
-# Pydantic-free request data class (avoids importing FastAPI here)
+# Shared request validation without importing FastAPI or the server.
 # ---------------------------------------------------------------------------
 
 class ScrapeParams:
@@ -247,16 +251,18 @@ class ScrapeParams:
         label: str | None = None,
         lane: str | None = None,
     ):
-        self.results_limit = results_limit
-        self.hours_old = hours_old
-        self.distance = distance
-        self.keywords = keywords
+        validated = ScrapeInput(results_limit=results_limit, hours_old=hours_old,
+                                distance=distance, keywords=keywords, source=source)
+        self.results_limit = validated.results_limit
+        self.hours_old = validated.hours_old
+        self.distance = validated.distance
+        self.keywords = validated.keywords
         # `source` dispatches the scraper branch; `label` is what gets STORED, so probe runs
         # can be told apart from the main lane without pretending to be a different actor.
-        self.source = source
-        self.label = label
+        self.source = validated.source
+        self.label = TypeAdapter(SourceLabel).validate_python(label) if label is not None else None
         # `lane` tags stored rows with a search lane (e.g. "bridge") so the UI can show them apart.
-        self.lane = lane
+        self.lane = TypeAdapter(ShortText).validate_python(lane) if lane is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -358,11 +364,15 @@ both are null.
 
 
 _MATCHING_RULES = """
-For match_score and match_analysis:
-- Candidate CV contains the candidate's factual employment/academic history, plus their career direction, focus areas, and constraints under 'Recent Experience & Standing Notes' (e.g. target roles, preferred work model like Hybrid/Remote, location preferences).
-- Factor both hard qualification alignment AND stated career preferences/constraints.
-- If a job posting directly conflicts with stated constraints or preferences (e.g. candidate requires hybrid/remote or specific domain, but posting is strict 5-day on-site elsewhere or opposite domain), penalize the match_score accordingly (e.g. -15 to -30 points) and explicitly call out the conflict in match_analysis.gaps.
-- Tier guidance: 'Strong Match' (score >= 80), 'Good Match' (score 65-79), 'Moderate Match' (score 50-64), 'Reach' (score < 50).
+For match_checks, list every stated requirement once. Use must for firm requirements, nice for optional or unclear requirements.
+posting_quote must be the shortest contiguous verbatim posting quote that states the requirement and its weight.
+coverage is shown when the CV states the skill directly, related for transferable experience, missing without CV evidence.
+cv_quote must be a contiguous verbatim CV quote supporting shown or related; use an empty string for missing.
+Do not substitute the posting, paraphrases or inferred skills for CV evidence.
+For preference_conflicts, use only the explicit Standing Notes section of the CV, never employment-history prose.
+Quote both the Standing Notes and posting verbatim. Hard severity requires explicit must-language in the notes
+(only, never, must, not willing, requires); other preferences are soft. Omit conflicts without both quotes.
+Do not rate the job overall. The app computes the rating from the verified evidence. match_analysis is display-only prose.
 """
 
 
@@ -399,10 +409,10 @@ def _build_analysis_prompt(description: str, cv_text: Optional[str], include_cle
             'NEVER summarize, shorten, paraphrase or drop content."'
         )
     if cv_text:
-        fields.append('"match_score": Integer from 0 to 100 rating how well the Candidate CV matches the job')
+        fields.append('"match_checks": [{"requirement": "Short requirement", "importance": "must" | "nice", "posting_quote": "Exact posting quote", "coverage": "shown" | "related" | "missing", "cv_quote": "Exact CV quote or empty string"}]')
+        fields.append('"preference_conflicts": [{"preference": "Short preference", "notes_quote": "Exact Standing Notes quote", "posting_quote": "Exact posting quote", "severity": "hard" | "soft"}]')
         fields.append(
             '"match_analysis": {\n'
-            '    "tier": "Strong Match" | "Good Match" | "Moderate Match" | "Reach",\n'
             '    "synthesis": "2-3 sentence overarching evaluation explaining why this candidate fits and the primary tradeoff/growth area",\n'
             '    "strengths": [{"title": "Short bold title", "detail": "1-2 sentences referencing candidate background aligning with requirements"}],\n'
             '    "gaps": [{"title": "Short bold title", "detail": "1-2 sentences describing missing or less demonstrated skills or logistics"}],\n'
@@ -412,7 +422,7 @@ def _build_analysis_prompt(description: str, cv_text: Optional[str], include_cle
     prompt = (
         "Analyze this job description and extract the following information.\n"
         "Respond ONLY with a valid JSON object. Do not include markdown formatting like ```json.\n\n"
-        "Evidence must be a contiguous, verbatim quote from the Job Description in its ORIGINAL language. "
+        "Posting evidence must be a contiguous, verbatim quote from the Job Description in its ORIGINAL language. "
         "Never translate, paraphrase, change case/punctuation, join separate excerpts, or quote the Candidate CV. "
         "Whitespace differences alone are tolerated; copy the original whitespace when possible. "
         "Omit absent constraints (use an empty constraints array); constraint strength must NEVER be 'none'. "
@@ -449,6 +459,7 @@ _TRUNCATED_FEEDBACK = (
 )
 
 
+@operation('interactive')
 def process_job_with_ai(
     description: str,
     cv_text: Optional[str] = None,
@@ -470,7 +481,7 @@ def process_job_with_ai(
             try:
                 text = run_ai_prompt(
                     _build_analysis_prompt(description, cv_text, include_cleanup=include_cleanup) + feedback,
-                    model_name=model_name, max_retries=1,
+                    model_name=model_name, max_retries=1, label='Posting analysis',
                     response_format=analysis_response_format(bool(cv_text), include_cleanup),
                 )
             except AIContentFilterError:
@@ -500,7 +511,7 @@ def process_job_with_ai(
                     continue
                 raise ValueError('AI response was invalid JSON') from None
             try:
-                validated = validate_extraction(data, raw_description, bool(cv_text))
+                validated = validate_extraction(data, raw_description, bool(cv_text), cv_text or '')
                 break
             except AnalysisValidationError as error:
                 # Save the INITIAL rejection before the correction call can replace it.
@@ -512,7 +523,7 @@ def process_job_with_ai(
                     '\nReturn the entire corrected JSON object. Correct only against the Job Description; '
                     'never use candidate facts as posting evidence. Evidence must be original-language '
                     'contiguous verbatim quotes (case and punctuation unchanged); omit absent constraints. '
-                    'Do not emit constraint strength none. Keep scores integer 0 through 100.'
+                    'Do not emit constraint strength none. Supply every requirement once with verified posting and CV quotes. '
                 )
         assert validated is not None  # Every exhausted failure above raises.
         german_level = validated.german_level
@@ -529,23 +540,25 @@ def process_job_with_ai(
             description = cleaned.strip()
 
         # Parse and normalize structured fields safely
-        match_score = validated.match_score
+        checks = [c.model_dump() for c in validated.match_checks or []]
+        conflicts = [c.model_dump() for c in validated.preference_conflicts]
+        label = match_rating(checks, conflicts) if cv_text else None
         match_analysis = validated.match_analysis.model_dump() if validated.match_analysis else None
         if not isinstance(match_analysis, dict):
             match_analysis = {
-                "tier": tier(match_score),
+                "tier": label,
                 "synthesis": data.get("summary", ""),
                 "strengths": [],
                 "gaps": [],
                 "tips": [],
             }
         else:
-            match_analysis.setdefault("tier", "Good Match")
+            match_analysis.setdefault("tier", label)
             match_analysis.setdefault("synthesis", data.get("summary", ""))
             match_analysis.setdefault("strengths", [])
             match_analysis.setdefault("gaps", [])
             match_analysis.setdefault("tips", [])
-        match_analysis['tier'] = tier(match_score)
+        match_analysis['tier'] = label
 
         tools_technologies = data.get("tools_technologies")
         if not isinstance(tools_technologies, list):
@@ -587,7 +600,14 @@ def process_job_with_ai(
             "tasks": tasks_list,
             "company_summary": data.get("company_summary") or None,
             "company_contact": data.get("company_contact") or None,
-            "match_score": match_score,
+            "match_score": None,
+            "analysis_schema": 2,
+            "match_rating": label,
+            "match_checks": checks,
+            "preference_conflicts": conflicts,
+            "judgement_calls": judgement_calls(checks, conflicts) if cv_text else [],
+            "grounding_status": 'adjusted' if validated.grounding_issues else 'verified',
+            "grounding_issues": validated.grounding_issues,
             "match_analysis": match_analysis,
             "description": description,
         }
@@ -600,6 +620,7 @@ def process_job_with_ai(
 NO_DESCRIPTION_ERROR = 'Posting description unavailable; acquisition incomplete'
 
 
+@operation('interactive')
 def analyse_stored_job(job: dict, user: dict, cv_text: Optional[str], model_name: str) -> tuple[bool, Optional[str]]:
     """Analyse one job already in the DB and store the result.
 
@@ -621,7 +642,7 @@ def analyse_stored_job(job: dict, user: dict, cv_text: Optional[str], model_name
         )
         update_kwargs = {
             **{key: ai_data.get(key) for key in ('raw_description', 'normalized_description', 'analysis_state',
-                 'analysis_fingerprint', 'analysis_model', 'german_strength', 'german_evidence', 'constraints',
+                 'analysis_fingerprint', 'analysis_model', 'analysis_schema', 'match_rating', 'match_checks', 'preference_conflicts', 'judgement_calls', 'grounding_status', 'grounding_issues', 'german_strength', 'german_evidence', 'constraints',
                  'salary_currency', 'salary_country', 'salary_payments') if key in ai_data},
             "processed": 1,
             "german_level": ai_data["german_level"],
@@ -646,9 +667,12 @@ def analyse_stored_job(job: dict, user: dict, cv_text: Optional[str], model_name
         return True, None
     except Exception as e:
         db.update_job_fields(jid, user_id=user_id, processed=0, analysis_state='failed', analysis_error=str(e))
+        if isinstance(e, OperationTerminated):
+            raise
         return False, str(e)
 
 
+@operation('collection')
 def retry_failed_analyses(user: dict, cv_text: Optional[str], model_name: str,
                           days: int = 3, limit: int = 15) -> tuple[int, int]:
     """Give recently failed analyses another try (daily run).
@@ -662,6 +686,7 @@ def retry_failed_analyses(user: dict, cv_text: Optional[str], model_name: str,
             if j.get("analysis_state") == 'failed' and str(j.get("date_scraped") or "") >= since][:limit]
     succeeded = failed = 0
     for job in jobs:
+        check()
         ok, err = analyse_stored_job(job, user, cv_text, model_name)
         if ok:
             succeeded += 1
@@ -683,6 +708,7 @@ def _present(record: dict) -> dict:
     return {k: v for k, v in record.items() if not (v is None or (isinstance(v, float) and v != v))}
 
 
+@operation('collection')
 def scrape_new_jobs(
     params: ScrapeParams,
     log_fn: Optional[Callable] = None,
@@ -699,6 +725,8 @@ def scrape_new_jobs(
     Returns a dict with success/message/new_jobs_count.
     """
     demo_mode.refuse_if_enabled()
+    # Revalidate at execution too: callers may retain and modify this mutable object.
+    ScrapeInput.model_validate(vars(params))
     if not user or "id" not in user:
         raise ValueError("scrape_new_jobs requires a user dict with an 'id' (multi-user storage)")
     user_id = user["id"]
@@ -708,7 +736,7 @@ def scrape_new_jobs(
 
     log_fn(f"Started scraping '{params.keywords}' (limit {params.results_limit}, distance {params.distance}km).", "info")
 
-    settings = _load_scraper_settings(username)
+    settings = validate_collection_config(_load_scraper_settings(username))
     linkedin_location = (settings.get("linkedin_location") or "").strip() or LOCATION
     karriere_region = (settings.get("karriere_region") or "").strip() or "wien-und-umgebung"
     denoise = denoise_enabled(username, params.source)
@@ -742,7 +770,8 @@ def scrape_new_jobs(
             for actor_id, run_input, to_job in attempts:
                 try:
                     run = apify_client.actor(actor_id).call(run_input=run_input)
-                    items = list(apify_client.dataset(run["defaultDatasetId"]).iterate_items())
+                    items = list(islice(apify_client.dataset(run["defaultDatasetId"]).iterate_items(),
+                                        params.results_limit * len(urls)))
                 except Exception as e:
                     logger.error(f"LinkedIn Apify actor {actor_id} failed: {e}")
                     actor_errors.append(f"{actor_id}: {e}")
@@ -791,7 +820,7 @@ def scrape_new_jobs(
                     "incrementalMode": True,
                     "stateKey": state_key,
                 })
-                items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+                items = list(islice(client.dataset(run["defaultDatasetId"]).iterate_items(), params.results_limit))
                 log_fn(f"Karriere Apify: {len(items)} listing(s) for '{kw}'.", "info")
                 if items:
                     frames.append(pd.DataFrame([_karriere_apify_item_to_job(item) for item in items]))
@@ -919,6 +948,7 @@ def scrape_new_jobs(
             job_data['lane'] = params.lane
         job_data['analysis_state'] = 'pending'
         job_data['match_score'] = None
+        job_data['match_rating'] = None
         job_data["processed"] = 0
         db.upsert_job(job_data, user_id=user_id)
         canonical = db.get_job_by_url(job_data.get('job_url'), user_id) if job_data.get('job_url') else None
@@ -930,13 +960,13 @@ def scrape_new_jobs(
 
     analysis_total = len(new_jobs)
     if async_task_id:
-        db.async_task_update(async_task_id, total=analysis_total, processed=0, failed=0)
+        db.async_task_update(async_task_id, stage='analysing', total=analysis_total, processed=0, failed=0)
 
     # --- Step 2: Analyze each job and mark processed=1 on success ---
     processed_count = 0
     analysis_errors = 0
     
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from background_queue import bounded_results
     import threading
     update_lock = threading.Lock()
     
@@ -963,7 +993,7 @@ def scrape_new_jobs(
                 row_salary = None
             update_kwargs = {
                 **{key: ai_data.get(key) for key in ('raw_description', 'normalized_description', 'normalization_version',
-                     'analysis_state', 'analysis_fingerprint', 'analysis_model', 'german_strength', 'german_evidence', 'constraints',
+                     'analysis_state', 'analysis_fingerprint', 'analysis_model', 'analysis_schema', 'match_rating', 'match_checks', 'preference_conflicts', 'judgement_calls', 'grounding_status', 'grounding_issues', 'german_strength', 'german_evidence', 'constraints',
                      'salary_currency', 'salary_country', 'salary_payments') if key in ai_data},
                 "processed": 1,
                 "german_level": ai_data["german_level"],
@@ -989,13 +1019,20 @@ def scrape_new_jobs(
             return True, None, title
         except Exception as e:
             db.update_job_fields(job_id, user_id=user_id, analysis_state='failed', analysis_error=str(e), processed=0)
+            if isinstance(e, OperationTerminated):
+                raise
             return False, str(e), title
 
-    max_workers = 5
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_job = {executor.submit(_process_job, row): row for _, row in new_jobs.iterrows()}
-        for future in as_completed(future_to_job):
-            success, err, title = future.result()
+    def cancelled():
+        if not async_task_id:
+            return False
+        row = db.async_task_get_scrape(async_task_id, user_id)
+        return bool(row and row['cancelled'])
+
+    max_workers = 2
+    with bounded_results(_process_job, (row for _, row in new_jobs.iterrows()),
+                         max_workers, cancelled=cancelled) as results:
+        for success, err, title in results:
             with update_lock:
                 if success:
                     processed_count += 1

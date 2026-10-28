@@ -26,16 +26,16 @@ try {
   assert.equal(demo.demo, true, 'Refuse to capture a normal instance.');
   await page.goto(base);
   await page.getByRole('button', { name: 'Explore the demo' }).click();
-  await page.locator('.job-card-company').filter({ hasText: 'Cumulus Research' }).waitFor();
-  await page.getByRole('button', { name: 'All jobs', exact: true }).click();
-  assert.equal(await page.getByRole('button', { name: 'Edit job', exact: true }).first().isDisabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Generate CV', exact: true }).first().isDisabled(), true);
+  await page.locator('.calm-job-company').filter({ hasText: 'Cumulus Research' }).waitFor();
+  await page.getByRole('button', { name: /^All \d+$/ }).click();
+  await page.getByRole('button', { name: /^Actions for/ }).first().click();
+  assert.equal(await page.getByRole('button', { name: 'Edit job', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Generate CV', exact: true }).isDisabled(), true);
+  await page.keyboard.press('Escape');
   await page.screenshot({ animations: 'disabled', path: `${output}/01-jobs.png` });
-  await page.getByRole('button', { name: 'Table', exact: true }).click();
-  await page.getByRole('button', { name: 'Cards', exact: true }).click();
-  await page.getByPlaceholder('Search jobs, companies, skills...').fill('Cumulus');
-  assert.equal(await page.locator('.job-card').count(), 1);
-  await page.locator('.job-card-company').filter({ hasText: 'Cumulus Research' }).click();
+  await page.getByRole('textbox', { name: 'Search jobs' }).fill('Cumulus');
+  assert.equal(await page.locator('.calm-job-row').count(), 1);
+  await page.locator('.calm-job-company').filter({ hasText: 'Cumulus Research' }).click();
   await page.getByText('Your Match Analysis', { exact: true }).waitFor();
   await page.screenshot({ animations: 'disabled', path: `${output}/02-fit.png` });
   await page.getByRole('tab', { name: 'Tailor Studio' }).click();
@@ -55,15 +55,15 @@ try {
   await page.getByText('Total Jobs', { exact: true }).waitFor();
   await page.screenshot({ animations: 'disabled', path: `${output}/06-analytics.png` });
   await page.getByRole('button', { name: 'Jobs', exact: true }).click();
-  await page.getByRole('button', { name: 'All jobs', exact: true }).click();
-  await page.getByPlaceholder('Search jobs, companies, skills...').fill('');
+  await page.getByRole('button', { name: /^All \d+$/ }).click();
+  await page.getByRole('textbox', { name: 'Search jobs' }).fill('');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile page overflows horizontally.');
   await page.screenshot({ animations: 'disabled', path: `${output}/07-mobile.png` });
   assert.deepEqual(errors, []);
   await writeFile(`${output}/verification.json`, JSON.stringify({
-    localDemo: true, login: true, cardAndTableViews: true, search: true, disabledWrites: true,
+    localDemo: true, login: true, groupedRatingList: true, search: true, disabledWrites: true,
     pdfDownload: true, analytics: true, mobileWidth: 390, horizontalOverflow: false,
     uncaughtErrors: errors, blockedExternalOrigins: [...new Set(external)],
     note: 'Screenshots show hand-prepared fictional examples. Media awaits owner approval.'

@@ -29,7 +29,7 @@ class StructuredJobExtractionTest(unittest.TestCase):
             ],
             "company_summary": "Global leader in semiconductor manufacturing technology.",
             "company_contact": "Dr. Thomas Meier",
-            "match_score": 88,
+            "match_checks": [{"requirement": "Python", "importance": "must", "posting_quote": "Python required", "coverage": "shown", "cv_quote": "Python experience"}],
             "match_analysis": {
                 "tier": "Good Match",
                 "synthesis": "Strong match due to Python and Linux proficiency.",
@@ -46,7 +46,7 @@ class StructuredJobExtractionTest(unittest.TestCase):
         })
 
         with mock.patch("scrapers.run_ai_prompt", return_value=fake_ai_output):
-            res = scrapers.process_job_with_ai("Test job description", cv_text="Test CV")
+            res = scrapers.process_job_with_ai("Python required. Test job description", cv_text="Python experience")
 
         self.assertEqual(res["german_level"], "B1")
         self.assertEqual(res["salary_yearly"], 50000)
@@ -57,8 +57,9 @@ class StructuredJobExtractionTest(unittest.TestCase):
         self.assertEqual(len(res["requirements"]), 3)
         self.assertEqual(len(res["tasks"]), 2)
         self.assertEqual(res["company_contact"], "Dr. Thomas Meier")
-        self.assertEqual(res["match_score"], 88)
-        self.assertEqual(res["match_analysis"]["tier"], "Strong Match")
+        self.assertIsNone(res["match_score"])
+        self.assertEqual(res["match_rating"], "Great")
+        self.assertEqual(res["match_analysis"]["tier"], "Great")
         self.assertEqual(len(res["match_analysis"]["strengths"]), 1)
         self.assertEqual(len(res["match_analysis"]["gaps"]), 1)
         self.assertEqual(len(res["match_analysis"]["tips"]), 1)
@@ -70,11 +71,11 @@ class StructuredJobExtractionTest(unittest.TestCase):
             "minimum_salary": "Not Specified",
             "skills": "Python, SQL",
             "summary": "Backend developer role.",
-            "match_score": 65
+            "match_checks": []
         })
 
         with mock.patch("scrapers.run_ai_prompt", return_value=minimal_output):
-            res = scrapers.process_job_with_ai("Test job description", cv_text="Test CV")
+            res = scrapers.process_job_with_ai("Python required. Test job description", cv_text="Python experience")
 
         self.assertEqual(res["german_level"], "none")
         self.assertFalse(res["requires_german"])
@@ -85,21 +86,22 @@ class StructuredJobExtractionTest(unittest.TestCase):
         self.assertEqual(res["requirements"], [])
         self.assertEqual(res["tasks"], [])
         self.assertIsNone(res["company_summary"])
-        self.assertEqual(res["match_score"], 65)
+        self.assertIsNone(res["match_score"])
+        self.assertEqual(res["match_rating"], "Unrated")
         self.assertIsInstance(res["match_analysis"], dict)
-        self.assertEqual(res["match_analysis"]["tier"], "Good Match")
+        self.assertEqual(res["match_analysis"]["tier"], "Unrated")
         self.assertEqual(res["match_analysis"]["strengths"], [])
         self.assertEqual(res["match_analysis"]["gaps"], [])
         self.assertEqual(res["match_analysis"]["tips"], [])
 
     def test_build_analysis_prompt_includes_intent_rules(self):
         prompt_with_cv = scrapers._build_analysis_prompt("Job text", cv_text="Candidate CV content", include_cleanup=False)
-        self.assertIn("Recent Experience & Standing Notes", prompt_with_cv)
-        self.assertIn("match_analysis.gaps", prompt_with_cv)
+        self.assertIn("Standing Notes", prompt_with_cv)
+        self.assertIn("preference_conflicts", prompt_with_cv)
         self.assertIn("Candidate CV:\nCandidate CV content", prompt_with_cv)
 
         prompt_no_cv = scrapers._build_analysis_prompt("Job text", cv_text=None, include_cleanup=False)
-        self.assertNotIn("Recent Experience & Standing Notes", prompt_no_cv)
+        self.assertNotIn("Standing Notes", prompt_no_cv)
         self.assertNotIn("Candidate CV:", prompt_no_cv)
 
 

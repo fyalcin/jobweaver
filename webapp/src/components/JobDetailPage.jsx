@@ -1,16 +1,18 @@
 import { useDemo } from '../demoContext';
+import { MatchEvidence, MatchRating } from './MatchEvidence';
+import { ratingLabel, sourceLabel } from '../constants/ratings';
 import { DemoDocuments } from './DemoDocuments';
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ArrowLeft, Sparkles, ExternalLink, Download, Wand2, RefreshCw,
+  ArrowLeft, Sparkles, ExternalLink, Download, RefreshCw,
   Save, CheckCircle2, FileText, Globe, Building2, MapPin,
   Calendar, DollarSign, UserCheck, Check, AlertCircle, AlertTriangle,
-  Lightbulb, Bot, Briefcase, X, ZoomIn, ZoomOut, Layers, CheckSquare,
+  Lightbulb, Briefcase, X, ZoomIn, ZoomOut, Layers, CheckSquare,
   Play, Maximize2, Code, Layout, Undo2, History, ChevronDown
 } from 'lucide-react';
 import { StatusSelect } from './StatusControls';
 import { germanLevelLabel } from '../constants/german';
-import { formatDateDisplay } from '../constants/dates';
+import { formatDateDisplay, formatDateTimeDisplay } from '../constants/dates';
 import { useJobStudio } from '../hooks/useJobStudio';
 import { TypstWasmPreview } from './studio/TypstWasmPreview';
 import { TypstSimpleEditor } from './studio/TypstSimpleEditor';
@@ -23,7 +25,8 @@ export function JobDetailPage({
   job,
   onBack,
   updateJobStatus,
-  getScoreBadgeClass,
+  handleStartReprocess,
+  reprocessTaskId,
   handleJobsGenerateCV,
   handleJobsGenerateLetter,
   handleJobsGenerateBoth,
@@ -212,23 +215,12 @@ export function JobDetailPage({
 
   const formatTimestamp = (ts) => {
     if (!ts) return null;
-    try {
-      const d = new Date(ts);
-      return d.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return ts;
-    }
+    return formatDateTimeDisplay(ts, ts);
   };
 
   // Structured extraction data with safe fallbacks
   const matchAnalysis = job.match_analysis || job.data?.match_analysis || null;
-  const matchTier = job.match_score == null ? 'Not ranked' : job.match_score >= 80 ? 'Strong Match' : job.match_score >= 65 ? 'Good Match' : job.match_score >= 50 ? 'Moderate Match' : 'Reach';
+  const matchTier = ratingLabel(job);
   const matchSynthesis = matchAnalysis?.synthesis || job.summary || 'AI evaluated this candidate profile against the requirements.';
   const strengths = matchAnalysis?.strengths || [];
   const gaps = matchAnalysis?.gaps || [];
@@ -277,7 +269,7 @@ export function JobDetailPage({
               studio.fetchDocuments();
             }}
           >
-            <Wand2 size={15} />
+            <FileText size={15} />
             <span>Tailor Studio</span>
           </button>
         </div>
@@ -327,9 +319,9 @@ export function JobDetailPage({
                       </span>
                     )}
                     {job.source && (
-                      <span className="badge badge-source" style={{ textTransform: 'capitalize' }}>
+                      <span className="badge badge-source">
                         <Globe size={13} style={{ marginRight: '4px' }} />
-                        {job.source}
+                        {sourceLabel(job.source)}
                       </span>
                     )}
                     {workModel && workModel !== 'Unknown' && (
@@ -341,12 +333,9 @@ export function JobDetailPage({
                   </div>
                 </div>
 
-                {/* Match score badge */}
-                <div className="job-detail-score-pill">
-                  <span className="score-label">Match Score</span>
-                  <span className={`badge ${getScoreBadgeClass(job.match_score)} score-value`}>
-                    {job.match_score != null ? `${job.match_score}%` : 'N/A'}
-                  </span>
+                <div className="job-detail-rating">
+                  <span>Match rating</span><MatchRating job={job} />
+                  <button className="btn btn-secondary" disabled={demo || !!reprocessTaskId} onClick={() => handleStartReprocess(job.id)}>{reprocessTaskId ? 'Rating in progress…' : 'Re-rate'}</button>
                 </div>
               </div>
 
@@ -375,7 +364,7 @@ export function JobDetailPage({
                 {job.application_date && (
                   <div className="info-chip">
                     <span className="info-chip-label">Applied on:</span>
-                    <span className="info-chip-val">{job.application_date}</span>
+                    <span className="info-chip-val">{formatDateDisplay(job.application_date)}</span>
                   </div>
                 )}
               </div>
@@ -413,7 +402,7 @@ export function JobDetailPage({
                       onClick={() => handleJobsGenerateBoth(job, { compact, engine: selectedEngine })}
                       disabled={demo || isGeneratingBoth}
                     >
-                      <Sparkles size={15} />
+                      <FileText size={15} />
                       <span>{isGeneratingBoth ? 'Generating Both…' : 'Generate Both'}</span>
                     </button>
                   )}
@@ -494,11 +483,9 @@ export function JobDetailPage({
               {/* AI Summary Card */}
               <section className="cockpit-ai-summary-card">
                 <div className="cockpit-summary-badge">
-                  <Sparkles size={14} /> AI Summary
+                  Summary
                 </div>
                 <p className="cockpit-summary-text">{job.summary || 'Summary unavailable.'}</p>
-                {job.analysis_current === false && <p>Match score needs updating: your CV or scoring model changed.</p>}
-                {job.analysis_current == null && <p>This historical score has not been checked against your current CV and scoring model.</p>}
                 {job.eligibility && (
                   <div role="status">
                     <strong>Eligibility: {job.eligibility.label}</strong>
@@ -507,28 +494,7 @@ export function JobDetailPage({
                 )}
               </section>
 
-              {/* Requirements */}
-              <section className="cockpit-card">
-                <div className="cockpit-card-header">
-                  <h2 className="cockpit-card-title">
-                    <CheckSquare size={17} color="var(--primary-color)" /> Requirements
-                  </h2>
-                </div>
-                {requirementsList.length > 0 ? (
-                  <ul className="cockpit-list">
-                    {requirementsList.map((req, idx) => (
-                      <li key={idx} className="cockpit-list-item">
-                        <Check size={16} className="cockpit-list-icon" />
-                        <span>{req}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-                    {job.skills ? `Requirements extracted from skills: ${job.skills}` : 'No structured requirements parsed.'}
-                  </p>
-                )}
-              </section>
+              <MatchEvidence job={job} />
 
               {/* Metadata Grid (2x2) */}
               <section className="cockpit-meta-grid">
@@ -602,18 +568,12 @@ export function JobDetailPage({
               <section className="cockpit-match-card">
                 <div className="cockpit-match-header">
                   <div className="cockpit-match-title-group">
-                    <div className="cockpit-agent-avatar">
-                      <Bot size={20} />
-                    </div>
                     <div className="cockpit-match-headings">
-                      <h2>Your Match Analysis</h2>
-                      <p>from your Career Agent</p>
+                      <h2>{matchTier === 'Needs re-rating' ? 'Historical match analysis' : 'Your Match Analysis'}</h2>
+                      <p>Interpretation of the recorded evidence</p>
                     </div>
                   </div>
-                  <span className="cockpit-tier-badge">
-                    <span className="cockpit-tier-dot" />
-                    {matchTier}
-                  </span>
+                  <MatchRating job={job} />
                 </div>
 
                 <div className="cockpit-synthesis-box">
@@ -638,7 +598,7 @@ export function JobDetailPage({
                     ))
                   ) : (
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
-                      Good alignment with your technical background and experience.
+                      No strengths recorded.
                     </p>
                   )}
                 </div>
@@ -647,14 +607,14 @@ export function JobDetailPage({
                 {gaps.length > 0 && (
                   <div className="cockpit-analysis-section">
                     <h3 className="cockpit-section-heading">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#f59e0b' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--warning-color)' }}>
                         <AlertTriangle size={16} /> Possible gaps
                       </span>
                       <span className="cockpit-count-badge">{gaps.length}</span>
                     </h3>
                     {gaps.map((g, idx) => (
-                      <div key={idx} className="cockpit-item-card" style={{ borderColor: 'rgba(245, 158, 11, 0.25)' }}>
-                        <span className="cockpit-item-title" style={{ color: '#f59e0b' }}>
+                      <div key={idx} className="cockpit-item-card">
+                        <span className="cockpit-item-title">
                           {g.title}
                         </span>
                         <span className="cockpit-item-detail">{g.detail}</span>
@@ -672,9 +632,9 @@ export function JobDetailPage({
                       </span>
                     </h3>
                     {tips.map((t, idx) => (
-                      <div key={idx} className="cockpit-item-card" style={{ borderColor: 'color-mix(in srgb, var(--primary-color) 25%, transparent)' }}>
-                        <span className="cockpit-item-title" style={{ color: 'var(--primary-light)' }}>
-                          <Check size={14} /> {t.title}
+                      <div key={idx} className="cockpit-item-card">
+                        <span className="cockpit-item-title">
+                          {t.title}
                         </span>
                         <span className="cockpit-item-detail">{t.detail}</span>
                       </div>
@@ -685,25 +645,22 @@ export function JobDetailPage({
 
               </section>
 
-              {/* Company Intelligence & Research (Perplexity Sonar) */}
+              {/* Company Notes & Research */}
               <section className="job-detail-section-card research-section-card">
                 <div className="section-card-header">
                   <div className="section-card-title-group">
-                    <div className="section-icon-badge research-badge-icon">
-                      <Globe size={18} />
-                    </div>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                        <h2 className="section-card-title">Company Intelligence</h2>
+                        <h2 className="section-card-title">Company Notes &amp; Research</h2>
                         <span className="sonar-brand-badge">
-                          <Sparkles size={13} /> Perplexity Sonar
+                          Perplexity Sonar
                         </span>
                       </div>
                       <div className="section-card-subtitle">
                         {job.company_research_updated_at ? (
                           <span>Last researched {formatTimestamp(job.company_research_updated_at)}</span>
                         ) : (
-                          <span>Live web research on mission, values, news, and tech signals.</span>
+                          <span>Background notes on the company&apos;s work, announcements, and technical stack.</span>
                         )}
                       </div>
                     </div>
@@ -716,7 +673,7 @@ export function JobDetailPage({
                       disabled={demo || researching}
                     >
                       <RefreshCw size={15} className={researching ? 'spin' : ''} />
-                      <span>{researching ? 'Researching…' : (researchText ? 'Re-run Sonar' : 'Research Sonar')}</span>
+                      <span>{researching ? 'Researching…' : (researchText ? 'Refresh notes' : 'Fetch notes')}</span>
                     </button>
                     <button
                       className="btn btn-secondary btn-save-notes"
@@ -737,7 +694,7 @@ export function JobDetailPage({
                         checked={useInDocs}
                         onChange={(e) => handleToggleUseInDocs(e.target.checked)}
                       />
-                      <span>Inject research into tailored Cover Letters</span>
+                      <span>Include these notes when drafting cover letters</span>
                     </label>
                     {isDirty && (
                       <span className="research-unsaved-badge">
@@ -753,7 +710,7 @@ export function JobDetailPage({
                       setResearchText(e.target.value);
                       setIsDirty(true);
                     }}
-                    placeholder={`Scour the web using Perplexity Sonar for ${job.company}'s core values, recent news, breakthroughs, and tech stack.\n\nYou can also freely type or edit notes here.`}
+                    placeholder={`Fetch public notes on ${job.company}'s work, recent announcements, and technical stack, or write your own notes here.`}
                     rows={8}
                   />
                 </div>
@@ -779,11 +736,7 @@ export function JobDetailPage({
                     <MapPin size={13} /> {job.location}
                   </span>
                 )}
-                {job.match_score != null && (
-                  <span className={`badge ${getScoreBadgeClass(job.match_score)} studio-job-context-match`}>
-                    {job.match_score}% Match
-                  </span>
-                )}
+                <MatchRating job={job} />
                 {job.salary_yearly && (
                   <span className="studio-job-context-salary hide-mobile">
                     €{Number(job.salary_yearly).toLocaleString('de-AT')}/yr
@@ -956,7 +909,7 @@ export function JobDetailPage({
             {!studio.pdfCurrent && studio.currentTex && <p role="status">The previous PDF may be out of date. Compile this version before finalizing.</p>}
             {!studio.loading && !studio.hasCv && !studio.hasLetter && !studio.currentTex ? (
               <div className="card" style={{ padding: '3.5rem 2rem', textAlign: 'center', margin: '1rem 0' }}>
-                <Wand2 size={44} color="var(--primary-color)" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                <FileText size={40} color="var(--text-secondary)" style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.6 }} />
                 <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
                   No Tailored Documents Generated Yet
                 </h2>
@@ -995,7 +948,7 @@ export function JobDetailPage({
                       }}
                       disabled={demo || isGeneratingBoth}
                     >
-                      <Sparkles size={16} />
+                      <FileText size={16} />
                       <span>{isGeneratingBoth ? 'Generating Both…' : 'Generate Both (CV & Letter)'}</span>
                     </button>
                   )}

@@ -22,7 +22,7 @@ class AnalysisValidationTest(unittest.TestCase):
 
     @staticmethod
     def response(**changes):
-        return json.dumps({'german_level': 'none', 'summary': 'Posting', 'match_score': 80, **changes})
+        return json.dumps({'german_level': 'none', 'summary': 'Posting', 'match_checks': [{'requirement': 'Posting requirement', 'importance': 'must', 'posting_quote': 'Posting', 'coverage': 'shown', 'cv_quote': 'Synthetic CV'}], **changes})
 
     def records(self):
         return [json.loads(path.read_text()) for path in sorted(self.directory.glob('failure-*.json'))]
@@ -88,10 +88,10 @@ class AnalysisValidationTest(unittest.TestCase):
                 scrapers.process_job_with_ai('German required. Extra words English', denoise=False)
             self.assertEqual(model.call_count, 2)
 
-    def test_missing_required_quotes_and_invalid_scores_still_fail(self):
+    def test_missing_required_quotes_and_invalid_checklists_still_fail(self):
         for changes in ({'german_strength': 'required', 'german_evidence': ''},
                         {'constraints': [{'kind': 'other', 'strength': 'preferred', 'value': 'x', 'evidence': ' '}]},
-                        *({'match_score': score} for score in (None, True, '80', -1, 101))):
+                        *({'match_checks': value} for value in (None, True, 'checks', [42], [{'requirement': 'X'}]))):
             with self.subTest(changes=changes), patch('scrapers.run_ai_prompt', return_value=self.response(
                 **changes)) as model, self.assertRaises(ValueError):
                 scrapers.process_job_with_ai('Posting', 'Synthetic CV', denoise=False)

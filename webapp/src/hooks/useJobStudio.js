@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 import { compileTypstClient, uint8ArrayToBase64, downloadPdfBlob } from '../services/typstWorkerClient';
 
 export function useJobStudio(jobId, onJobUpdated) {
+  const api = useApi();
   const [activeDocType, setActiveDocType] = useState('cv'); // 'cv' | 'letter'
   const [cvTex, setCvTex] = useState('');
   const [clTex, setClTex] = useState('');
@@ -77,7 +78,7 @@ export function useJobStudio(jobId, onJobUpdated) {
     } finally {
       if (currentRef.current.jobId === jobId && sequence === loadSequence.current) setLoading(false);
     }
-  }, [jobId]);
+  }, [api, jobId]);
 
   useEffect(() => {
     fetchDocuments();
@@ -146,7 +147,7 @@ export function useJobStudio(jobId, onJobUpdated) {
     } finally {
       if (currentRef.current.jobId === jobId && sequence === operationSequence.current) setCompiling(false);
     }
-  }, [jobId, activeDocType, cvTex, clTex, docEngine]);
+  }, [jobId, activeDocType, cvTex, clTex, docEngine, api]);
 
   // AI Surgical Edit
   const aiEdit = useCallback(async (instruction, selection = null, modelName = null) => {
@@ -202,7 +203,7 @@ export function useJobStudio(jobId, onJobUpdated) {
     } finally {
       if (currentRef.current.jobId === jobId && sequence === operationSequence.current) setAiEditing(false);
     }
-  }, [jobId, activeDocType, cvTex, clTex]);
+  }, [jobId, activeDocType, cvTex, clTex, api]);
 
   // Revert/restore to an AI snapshot by versionId
   const restoreVersion = useCallback(async (versionId) => {
@@ -247,7 +248,7 @@ export function useJobStudio(jobId, onJobUpdated) {
     } finally {
       if (currentRef.current.jobId === jobId && sequence === operationSequence.current) setCompiling(false);
     }
-  }, [jobId, activeDocType, cvTex, clTex]);
+  }, [jobId, activeDocType, cvTex, clTex, api]);
 
   // Finalize & Save PDFs
   const finalize = useCallback(async () => {
@@ -274,7 +275,7 @@ export function useJobStudio(jobId, onJobUpdated) {
     } finally {
       if (currentRef.current.jobId === jobId) setSaving(false);
     }
-  }, [jobId, cvTex, clTex, onJobUpdated]);
+  }, [jobId, api, cvTex, clTex, onJobUpdated]);
 
   const downloadClientPdf = useCallback(async (type = null) => {
     const targetType = type || activeDocType;

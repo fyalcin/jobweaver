@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 import { STATUS_CONFIG, STATUS_ORDER } from '../constants/status';
+import { compareJobs, matchesRating, matchesStage, normalizeJobsView, APPLIED_STATUSES, jobStatus } from '../constants/ratings';
 import { germanLevelCompatible, germanLevelLabel, normalizeGermanLevel } from '../constants/german';
 
 // Keys were prefixed `gimme-jobs.` before the Jobweaver rename (2026-10-04).
@@ -17,7 +18,7 @@ function getSavedViewsStorageKey(username) {
 
 function readStoredValue(kind, username) {
   const user = username || 'default';
-  return localStorage.getItem(`${STORAGE_PREFIX}.${kind}.${user}`);
+  return localStorage.getItem(`${STORAGE_PREFIX}.${kind}.${user}`) ?? localStorage.getItem(`gimme-jobs.${kind}.${user}`);
 }
 
 function loadJobsView(username) {
@@ -25,7 +26,7 @@ function loadJobsView(username) {
   try {
     const raw = readStoredValue('jobs-view', username);
     const saved = JSON.parse(raw || '{}');
-    return saved && typeof saved === 'object' ? saved : {};
+    return normalizeJobsView(saved && typeof saved === 'object' ? saved : {});
   } catch {
     return {};
   }
@@ -36,13 +37,14 @@ function loadSavedViews(username) {
   try {
     const raw = readStoredValue('saved-views', username);
     const saved = JSON.parse(raw || '[]');
-    return Array.isArray(saved) ? saved : [];
+    return Array.isArray(saved) ? saved.map(normalizeJobsView) : [];
   } catch {
     return [];
   }
 }
 
 export function useJobs({ user, addToast, aiTone }) {
+  const api = useApi();
   const username = user?.username || 'default';
   const defaultGerman = 'All';
   const defaultStatus = 'new';
@@ -70,13 +72,13 @@ export function useJobs({ user, addToast, aiTone }) {
     : '__recent21';
   const [scrapeDateFilter, setScrapeDateFilter] = useState(initialDateFilter);
   const [sourceFilter, setSourceFilter] = useState(savedView.sourceFilter || 'All');
-  const [minMatchFilter, setMinMatchFilter] = useState(savedView.minMatchFilter || '');
+  const [minimumRating, setMinimumRating] = useState(savedView.minimumRating || '');
   const [searchQuery, setSearchQuery] = useState(savedView.searchQuery || '');
 
   // Pagination & Sorting
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(savedView.itemsPerPage || 25);
-  const [sortConfig, setSortConfig] = useState(savedView.sortConfig || { key: 'match_score', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState(savedView.sortConfig || { key: 'match_rating', direction: 'desc' });
   const [viewMode, setViewMode] = useState(savedView.viewMode || 'cards');
 
   // Batch actions
@@ -102,7 +104,7 @@ export function useJobs({ user, addToast, aiTone }) {
     setStatusFilter((!view.statusFilter || view.statusFilter === 'active') ? defaultStatus : view.statusFilter);
     setScrapeDateFilter(view.scrapeDateFilter || '__recent21');
     setSourceFilter(view.sourceFilter || 'All');
-    setMinMatchFilter(view.minMatchFilter || '');
+    setMinimumRating(view.minimumRating || '');
     setSearchQuery(view.searchQuery || '');
     if (view.itemsPerPage) setItemsPerPage(view.itemsPerPage);
     if (view.sortConfig) setSortConfig(view.sortConfig);
@@ -115,13 +117,14 @@ export function useJobs({ user, addToast, aiTone }) {
     try {
       const res = await api.get('/jobs');
       setJobs(res.data);
+      setSelectedJobDetails(previous => previous ? res.data.find(job => job.id === previous.id) || previous : previous);
       setSelectedJobIds(new Set());
     } catch {
       addToast('Failed to connect to backend API.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const fetchDailyDates = useCallback(async () => {
     try {
@@ -135,7 +138,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } catch (err) {
       console.error('Failed to fetch daily dates', err);
     }
-  }, []);
+  }, [api]);
 
   const fetchDailyResults = useCallback(async (date) => {
     if (!date) return;
@@ -149,7 +152,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setDailyLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   useEffect(() => {
     if (selectedDailyDate) fetchDailyResults(selectedDailyDate);
@@ -170,7 +173,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } catch {
       addToast('Failed to update status', 'error');
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleBatchMark = useCallback(async (filteredJobsThisTab) => {
     const targets = filteredJobsThisTab.filter(j => j.status !== batchMarkStatus);
@@ -192,7 +195,7 @@ export function useJobs({ user, addToast, aiTone }) {
     }
     setBatchMarkActive(false);
     addToast(`Marked ${done} job${done !== 1 ? 's' : ''} as "${STATUS_CONFIG[batchMarkStatus]?.label}".`, 'success');
-  }, [batchMarkStatus, addToast]);
+  }, [batchMarkStatus, addToast, api]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingJob) return;
@@ -207,7 +210,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setSavingEdit(false);
     }
-  }, [editingJob, editTitle, editCompany, addToast]);
+  }, [editingJob, api, editTitle, editCompany, addToast]);
 
   const handleDeleteUnreviewed = useCallback(async () => {
     if (window.confirm("Delete all 'new' and 'interested' jobs? This preserves your pipeline (applied, interview, offer, rejected) and cannot be undone.")) {
@@ -219,7 +222,7 @@ export function useJobs({ user, addToast, aiTone }) {
         addToast("Failed to delete unreviewed jobs.", "error");
       }
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleDeleteJob = useCallback(async (job) => {
     const label = `${job.title || job.id}${job.company ? ` @ ${job.company}` : ''}`;
@@ -231,7 +234,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } catch {
       addToast("Failed to delete job.", "error");
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleNuke = useCallback(async () => {
     if (window.confirm("DANGER ZONE: This will delete EVERY job including your pipeline (applied, interview, offer). This action cannot be undone. Are you sure?")) {
@@ -243,7 +246,7 @@ export function useJobs({ user, addToast, aiTone }) {
         addToast("Failed to clear database.", "error");
       }
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleJobsGenerateCV = useCallback(async (job, options = {}) => {
     const key = `${job.id}-cv`;
@@ -268,7 +271,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setGeneratingJobsDocs(prev => { const s = new Set(prev); s.delete(key); return s; });
     }
-  }, [aiTone, addToast]);
+  }, [addToast, aiTone, api]);
 
   const handleJobsGenerateLetter = useCallback(async (job, options = {}) => {
     const key = `${job.id}-letter`;
@@ -288,7 +291,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setGeneratingJobsDocs(prev => { const s = new Set(prev); s.delete(key); return s; });
     }
-  }, [aiTone, addToast]);
+  }, [addToast, aiTone, api]);
 
   const handleJobsGenerateBoth = useCallback(async (job, options = {}) => {
     const cvKey = `${job.id}-cv`;
@@ -329,7 +332,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setGeneratingJobsDocs(prev => { const s = new Set(prev); s.delete(cvKey); s.delete(clKey); return s; });
     }
-  }, [aiTone, addToast]);
+  }, [addToast, aiTone, api]);
 
   const handleResearchCompany = useCallback(async (jobId, modelName = null) => {
     setResearchingJobId(jobId);
@@ -352,7 +355,7 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setResearchingJobId(null);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleSaveCompanyResearch = useCallback(async (jobId, researchText, useInDocs = true) => {
     try {
@@ -373,7 +376,7 @@ export function useJobs({ user, addToast, aiTone }) {
       addToast(`Failed to save research notes: ${err.response?.data?.detail || err.message}`, 'error');
       return false;
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const handleGenerateDocs = useCallback(async (job, options = {}) => { // Daily docs generator
     const jobId = job.id;
@@ -413,17 +416,10 @@ export function useJobs({ user, addToast, aiTone }) {
     } finally {
       setGeneratingDocs(prev => { const s = new Set(prev); s.delete(jobId); return s; });
     }
-  }, [aiTone, addToast]);
-
-  const getScoreBadgeClass = useCallback((score) => {
-    if (!score || isNaN(score)) return 'badge-score-low';
-    if (score >= 80) return 'badge-score-high';
-    if (score >= 60) return 'badge-score-med';
-    return 'badge-score-low';
-  }, []);
+  }, [addToast, aiTone, api]);
 
   // Derived state
-  const appliedCount = useMemo(() => jobs.filter(j => j.status === 'applied' || j.applied).length, [jobs]);
+  const appliedCount = useMemo(() => jobs.filter(j => APPLIED_STATUSES.includes(jobStatus(j))).length, [jobs]);
   const actionableCount = useMemo(() =>
     jobs.filter(j => {
       const jobStatus = j.status || (j.applied ? 'applied' : 'new');
@@ -445,14 +441,9 @@ export function useJobs({ user, addToast, aiTone }) {
     if (germanFilter !== 'All' && germanFilter === 'B1' && !germanLevelCompatible(germanLevel, 'B1')) return false;
     if (germanFilter !== 'All' && germanFilter !== 'B1' && germanLevel !== germanFilter) return false;
 
-    const jobStatus = job.status || (job.applied ? 'applied' : 'new');
-    if (statusFilter === 'active') {
-      if (!['new', 'interested'].includes(jobStatus)) return false;
-    } else if (statusFilter !== 'All' && jobStatus !== statusFilter) {
-      return false;
-    }
+    if (!matchesStage(job, statusFilter)) return false;
 
-    const isPipelineJob = ['applied', 'interview', 'offer', 'rejected', 'interested'].includes(jobStatus);
+    const isPipelineJob = ['applied', 'interview', 'offer', 'rejected', 'interested'].includes(jobStatus(job));
     const effectiveDateFilter = scrapeDateFilter || '__recent21';
 
     if (effectiveDateFilter === '__recent21') {
@@ -480,7 +471,7 @@ export function useJobs({ user, addToast, aiTone }) {
     }
 
     if (sourceFilter !== 'All' && job.source !== sourceFilter) return false;
-    if (minMatchFilter !== '' && (job.match_score == null || Number(job.match_score) < Number(minMatchFilter))) return false;
+    if (!matchesRating(job, minimumRating)) return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -489,22 +480,22 @@ export function useJobs({ user, addToast, aiTone }) {
           !job.skills?.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [jobs, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minMatchFilter, searchQuery]);
+  }), [jobs, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minimumRating, searchQuery]);
 
   // Reset pagination on filter change
-  useEffect(() => { setCurrentPage(1); }, [germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minMatchFilter, searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minimumRating, searchQuery]);
 
   useEffect(() => {
     try {
       const key = getJobsViewStorageKey(user?.username);
       localStorage.setItem(key, JSON.stringify({
         germanFilter, statusFilter, scrapeDateFilter, sourceFilter,
-        minMatchFilter, searchQuery, itemsPerPage, sortConfig, viewMode,
+        minimumRating, searchQuery, itemsPerPage, sortConfig, viewMode,
       }));
     } catch {
       // View preferences are optional and should never block the app.
     }
-  }, [user?.username, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minMatchFilter, searchQuery, itemsPerPage, sortConfig, viewMode]);
+  }, [user?.username, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minimumRating, searchQuery, itemsPerPage, sortConfig, viewMode]);
 
   const activeFilters = useMemo(() => {
     const filters = [];
@@ -524,7 +515,7 @@ export function useJobs({ user, addToast, aiTone }) {
     if (statusFilter === 'active') {
       filters.push({ key: 'status', label: 'Status: Active (Unapplied)' });
     } else if (statusFilter !== 'All') {
-      filters.push({ key: 'status', label: `Status: ${STATUS_CONFIG[statusFilter]?.label || statusFilter}` });
+      filters.push({ key: 'status', label: `Status: ${statusFilter === 'pipeline' ? 'Applied pipeline' : STATUS_CONFIG[statusFilter]?.label || statusFilter}` });
     }
     if (sourceFilter !== 'All') filters.push({ key: 'source', label: `Source: ${sourceFilter}` });
     if (scrapeDateFilter === '__today') filters.push({ key: 'date', label: 'Scraped: Today' });
@@ -532,50 +523,51 @@ export function useJobs({ user, addToast, aiTone }) {
     else if (scrapeDateFilter === '__recent21' || !scrapeDateFilter) filters.push({ key: 'date', label: 'Recent (≤21 days)' });
     else if (scrapeDateFilter === '__last30') filters.push({ key: 'date', label: 'Scraped: Last 30 days' });
     else if (scrapeDateFilter !== '__all') filters.push({ key: 'date', label: `Scraped: ${scrapeDateFilter}` });
-    if (minMatchFilter !== '') filters.push({ key: 'score', label: `Score >= ${minMatchFilter}` });
+    if (minimumRating !== '') filters.push({ key: 'rating', label: `Rating: ${minimumRating} or better` });
     return filters;
-  }, [defaultGerman, germanFilter, statusFilter, sourceFilter, scrapeDateFilter, minMatchFilter, searchQuery]);
+  }, [defaultGerman, germanFilter, statusFilter, sourceFilter, scrapeDateFilter, minimumRating, searchQuery]);
 
   const clearFilters = useCallback(() => {
     setGermanFilter(defaultGerman);
-    setStatusFilter(defaultStatus);
-    setScrapeDateFilter('__recent21');
+    setStatusFilter('All');
+    setScrapeDateFilter('__all');
     setSourceFilter('All');
-    setMinMatchFilter('');
+    setMinimumRating('');
     setSearchQuery('');
-  }, [defaultGerman, defaultStatus]);
+  }, [defaultGerman]);
 
   const clearFilter = useCallback((key) => {
     if (key === 'search') setSearchQuery('');
     if (key === 'german') setGermanFilter(defaultGerman);
-    if (key === 'status') setStatusFilter(statusFilter === defaultStatus ? 'All' : defaultStatus);
+    if (key === 'status') setStatusFilter('All');
     if (key === 'source') setSourceFilter('All');
     if (key === 'date') setScrapeDateFilter('__all');
-    if (key === 'score') setMinMatchFilter('');
-  }, [defaultGerman, defaultStatus, statusFilter]);
+    if (key === 'rating') setMinimumRating('');
+  }, [defaultGerman]);
 
-  const applyView = useCallback((view) => {
+  const applyView = useCallback((saved) => {
+    const view = normalizeJobsView(saved);
     setGermanFilter(view.germanFilter || defaultGerman);
     setStatusFilter(view.statusFilter || defaultStatus);
     setScrapeDateFilter(view.scrapeDateFilter || '__recent21');
     setSourceFilter(view.sourceFilter || 'All');
-    setMinMatchFilter(view.minMatchFilter || '');
+    setMinimumRating(view.minimumRating || '');
     setSearchQuery(view.searchQuery || '');
     if (view.sortConfig) setSortConfig(view.sortConfig);
     if (view.viewMode) setViewMode(view.viewMode);
   }, [defaultGerman, defaultStatus]);
 
   const quickViews = useMemo(() => ({
-    inbox: { germanFilter: defaultGerman, statusFilter: 'new', minMatchFilter: '65', scrapeDateFilter: '__recent21' },
-    highMatches: { germanFilter: defaultGerman, statusFilter: 'new', minMatchFilter: '85', scrapeDateFilter: '__recent21' },
-    last7: { germanFilter: defaultGerman, statusFilter: 'new', minMatchFilter: '', scrapeDateFilter: '__last7' },
-    all: { germanFilter: 'All', statusFilter: 'All', minMatchFilter: '', scrapeDateFilter: '__all' },
+    inbox: { germanFilter: defaultGerman, statusFilter: 'new', minimumRating: 'Good', scrapeDateFilter: '__recent21' },
+    highMatches: { germanFilter: defaultGerman, statusFilter: 'new', minimumRating: 'Great', scrapeDateFilter: '__recent21' },
+    last7: { germanFilter: defaultGerman, statusFilter: 'new', minimumRating: '', scrapeDateFilter: '__last7' },
+    all: { germanFilter: 'All', statusFilter: 'All', minimumRating: '', scrapeDateFilter: '__all' },
   }), [defaultGerman]);
 
   const saveCurrentView = useCallback((name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const view = { name: trimmed, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minMatchFilter, searchQuery, sortConfig, viewMode };
+    const view = { name: trimmed, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minimumRating, searchQuery, sortConfig, viewMode };
     setSavedViews(prev => {
       const next = [...prev.filter(item => item.name !== trimmed), view].slice(-12);
       try {
@@ -583,7 +575,7 @@ export function useJobs({ user, addToast, aiTone }) {
       } catch { /* Local storage can be unavailable. Keep the current in-memory views. */ }
       return next;
     });
-  }, [user?.username, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minMatchFilter, searchQuery, sortConfig, viewMode]);
+  }, [user?.username, germanFilter, statusFilter, scrapeDateFilter, sourceFilter, minimumRating, searchQuery, sortConfig, viewMode]);
 
   const deleteSavedView = useCallback((name) => {
     setSavedViews(prev => {
@@ -618,34 +610,11 @@ export function useJobs({ user, addToast, aiTone }) {
   }, []);
 
   const sortedJobs = useMemo(() => {
-    const arr = [...filteredJobs];
-    if (!sortConfig.key) return arr;
-    arr.sort((a, b) => {
-      if (sortConfig.key === 'salary_yearly') {
-        // Numeric sort; unknown salaries (null/absent) always last.
-        const an = Number(a.salary_yearly), bn = Number(b.salary_yearly);
-        const aOk = a.salary_yearly != null && Number.isFinite(an), bOk = b.salary_yearly != null && Number.isFinite(bn);
-        if (aOk && bOk) return sortConfig.direction === 'asc' ? an - bn : bn - an;
-        if (aOk) return -1;
-        if (bOk) return 1;
-        return 0;
-      }
-      let av = a[sortConfig.key], bv = b[sortConfig.key];
-      if (av == null) av = ''; if (bv == null) bv = '';
-      if (sortConfig.key === 'match_score') { av = Number(av) || 0; bv = Number(bv) || 0; }
-      else if (sortConfig.key === 'german_level') {
-        av = normalizeGermanLevel(av); bv = normalizeGermanLevel(bv);
-      } else if (sortConfig.key === 'date_scraped') {
-        av = av ? new Date(av).getTime() : 0; bv = bv ? new Date(bv).getTime() : 0;
-      }
-      if (av < bv) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (av > bv) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return arr;
+    return [...filteredJobs].sort((a, b) => compareJobs(a, b, sortConfig));
   }, [filteredJobs, sortConfig]);
 
   const totalPages = Math.max(1, Math.ceil(sortedJobs.length / itemsPerPage));
+  useEffect(() => { setCurrentPage(page => Math.min(page, totalPages)); }, [totalPages]);
   const paginatedJobs = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return sortedJobs.slice(start, start + itemsPerPage);
@@ -663,7 +632,7 @@ export function useJobs({ user, addToast, aiTone }) {
     statusFilter, setStatusFilter,
     scrapeDateFilter, setScrapeDateFilter,
     sourceFilter, setSourceFilter,
-    minMatchFilter, setMinMatchFilter,
+    minimumRating, setMinimumRating,
     searchQuery, setSearchQuery,
     currentPage, setCurrentPage,
     itemsPerPage, setItemsPerPage,
@@ -684,7 +653,7 @@ export function useJobs({ user, addToast, aiTone }) {
     fetchJobs, fetchDailyDates, updateJobStatus, handleBatchMark,
     handleSaveEdit, handleDeleteUnreviewed, handleNuke, handleDeleteJob,
     handleJobsGenerateCV, handleJobsGenerateLetter, handleJobsGenerateBoth,
-    handleGenerateDocs, getScoreBadgeClass,
+    handleGenerateDocs,
     handleSort,
     researchingJobId, handleResearchCompany, handleSaveCompanyResearch
   };

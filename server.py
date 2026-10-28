@@ -8,13 +8,13 @@ import shutil
 import time
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from contextlib import asynccontextmanager
 import pandas as pd
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Body, Query, Depends, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Body, Query, Depends, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator, ConfigDict, ValidationError
-from typing import Optional, List, Any, Union, Literal
+from typing import Annotated, Optional, List, Any, Literal
 from dotenv import load_dotenv
 from datetime import datetime
 import json
@@ -23,7 +23,7 @@ import base64
 from pathlib import Path
 from document_artifacts import (atomic_write, decode_pdf, digest, document_lock, active_source, select_source,
                                 matching_build, record_build)
-from job_policy import eligibility, qualifies, fingerprint
+from job_policy import eligibility, qualifies, fingerprint, apply_rating, normalize_rating_config, rating_sort_key
 import reviewed_documents
 
 # Local imports
@@ -31,6 +31,16 @@ import db
 import auth
 import demo_mode
 import user_assets
+from ui_preferences import DEFAULT_THEME, DEFAULT_FONT, normalize_theme, normalize_font
+import web_security
+from background_queue import BackgroundQueue, bounded_results
+from operation_budget import (operation, check, current, OperationTerminated, OperationDeadline, OperationCancelled,
+                              OperationExhausted, OperationBusy, QuotaExceeded)
+import model_usage
+from request_limits import RequestBodyLimitMiddleware
+from input_limits import (ScrapeInput, CollectionConfig, LinkedinScraperConfig, KarriereScraperConfig,
+                          ModelName, Identifier, ShortText, SourceText, Instruction, PdfBase64, MAX_BATCH_JOBS,
+                          AutoGenerateConfig, DocumentInstructions)
 from user_assets import (
     resolve_user_path,
     user_outputs_dir,
@@ -40,6 +50,8 @@ from user_assets import (
     ensure_user_dirs,
     load_effective_cv,
     load_standing_notes,
+    own_cv_path,
+    NO_CV_MESSAGE,
 )
 from german import german_level_compatible, normalize_german_level
 import scrapers as _scrapers
@@ -63,7 +75,7 @@ load_dotenv()
 
 # Initialise SQLite DB (creates tables + migrates JSON on first run)
 db.init_db()
-db.async_task_recover_interrupted()
+model_usage.settings()  # Fail at startup on invalid JOBWEAVER_QUOTA_* settings.
 
 
 # --- Authentication ---
@@ -79,8 +91,8 @@ def get_current_user(request: Request) -> dict:
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 def load_user_config_dict(user: Optional[dict] = None) -> dict:
@@ -94,7 +106,7 @@ def load_user_config_dict(user: Optional[dict] = None) -> dict:
     try:
         with open(cfg_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        return cfg if isinstance(cfg, dict) else {}
+        return normalize_rating_config(cfg) if isinstance(cfg, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -120,6 +132,8 @@ def load_document_engine_config(user: Optional[dict] = None) -> tuple[str, str]:
                       else auto_gen.get("document_engine", default_engine))
             template = auto_gen.get("typst_cv_template", default_template)
             return engine, template
+        except OperationTerminated:
+            raise
         except Exception:
             pass
     return default_engine, default_template
@@ -156,7 +170,7 @@ def _effective_ai_model(explicit_model: Optional[str] = None, user: Optional[dic
     return resolve_document_model(cfg)
 
 
-def _rename_doc_folders_if_company_changed(job_id: str, old_company: str, new_company: str, username: str) -> None:
+def _rename_doc_folders_if_company_changed(job_id: Identifier, old_company: str, new_company: str, username: str) -> None:
     """Rename the user's drafts/ and outputs/ subfolders when the job company name changes."""
     if (old_company or "") == (new_company or ""):
         return
@@ -189,9 +203,24 @@ def _rename_doc_folders_if_company_changed(job_id: str, old_company: str, new_co
 REPROCESS_WORKERS = 2
 
 
-def _run_reprocess_bg(task_id: str, user: dict) -> None:
+@operation('collection')
+def _run_reprocess_bg(task_id: Identifier, user: dict, all_scored: bool = False, job_id: str | None = None) -> None:
+    current().add_cancel_check(lambda: bool((db.async_task_get(task_id, user['id']) or {}).get('cancelled')))
+    check()
     user_id = user["id"]
-    jobs = db.load_unprocessed_jobs(user_id)
+    if all_scored and job_id is None:
+        db.async_task_update(task_id, stage='resetting_analysis')
+        # Only accepted, dispatched work may reset previous analysis.
+        for job in db.load_all_jobs(user_id).to_dict(orient='records'):
+            db.update_job_fields(job['id'], user_id=user_id, processed=0, analysis_state='pending')
+    if job_id is not None:
+        target = db.get_job_by_id(job_id, user_id)
+        jobs = [target] if target else []
+        if target:
+            db.update_job_fields(job_id, user_id=user_id, processed=0, analysis_state='pending')
+    else:
+        jobs = db.load_unprocessed_jobs(user_id)
+    db.async_task_update(task_id, stage='analysing')
     total = len(jobs)
     db.async_task_update(task_id, total=total, processed=0, failed=0)
 
@@ -208,6 +237,7 @@ def _run_reprocess_bg(task_id: str, user: dict) -> None:
     lock = threading.Lock()
 
     def _one(job):
+        check()
         st = db.async_task_get_reprocess(task_id, user_id)
         if st and st.get("cancelled"):
             with lock:
@@ -222,8 +252,14 @@ def _run_reprocess_bg(task_id: str, user: dict) -> None:
                 counts["failed"] += 1
             db.async_task_update(task_id, processed=counts["processed"], failed=counts["failed"])
 
-    with ThreadPoolExecutor(max_workers=REPROCESS_WORKERS) as pool:
-        list(pool.map(_one, jobs))
+    def cancelled():
+        row = db.async_task_get_reprocess(task_id, user_id)
+        return bool(row and row['cancelled'])
+
+    with bounded_results(_one, jobs, REPROCESS_WORKERS, cancelled=cancelled) as results:
+        for _ in results:
+            pass
+    counts['cancelled'] = counts['cancelled'] or cancelled()
 
     failed_count = counts["failed"]
     final_status = "cancelled" if counts["cancelled"] else "failed" if failed_count == total else "completed"
@@ -235,24 +271,72 @@ def _run_reprocess_bg(task_id: str, user: dict) -> None:
     )
 
 
-app = FastAPI(title="Job Scraper API")
+@asynccontextmanager
+async def lifespan(app):
+    queue = BackgroundQueue()
+    # Acquire the exclusive owner lock before recovery. A second worker refuses
+    # startup and cannot mark the first worker's operations interrupted.
+    queue.start()
+    app.state.background_queue = queue
+    try:
+        yield
+    finally:
+        await asyncio.to_thread(queue.close)
+        app.state.background_queue = None
 
-# Enable CORS for the React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Same-origin via Vite proxy / static mount
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+app = FastAPI(title="Job Scraper API", lifespan=lifespan)
+
+
+def _background_queue():
+    queue = getattr(app.state, 'background_queue', None)
+    if queue is None:
+        raise HTTPException(status_code=503, detail='Background worker is unavailable')
+    return queue
+
+
+def _admit_background(kind, user, payload, callback, *, total=None):
+    try:
+        return _background_queue().submit(kind, user['id'], payload, callback, total=total)
+    except db.TaskCapacityError as exc:
+        raise HTTPException(status_code=429, detail=str(exc), headers={'Retry-After': '5'}) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+# The production frontend and development proxy share the browser's origin.
+web_security.allowed_hosts()  # Fail at startup on a wildcard deployment policy.
+
+
+@app.exception_handler(OperationTerminated)
+async def operation_terminal_response(request, exc):
+    status = (408 if isinstance(exc, OperationDeadline) else 429 if isinstance(exc, OperationExhausted)
+              else 503 if isinstance(exc, OperationBusy) else 409 if isinstance(exc, OperationCancelled) else 502)
+    retry = str(exc.retry_after) if isinstance(exc, QuotaExceeded) else {429: '1', 503: '5'}.get(status)
+    return JSONResponse(status_code=status, content={'detail': str(exc), 'success': False},
+                        headers={'Retry-After': retry} if retry else None)
 
 
 @app.middleware("http")
 async def demo_mode_guard(request: Request, call_next):
-    """In demo mode, refuse every request that would change data (demo_mode.py)."""
+    """Protect browser requests in both normal and demo deployments."""
+    if not web_security.trusted_host(request):
+        return JSONResponse(status_code=400, content={'detail': 'Untrusted request hostname'})
+    if web_security.secure_cookies() and request.url.scheme != 'https':
+        return JSONResponse(status_code=400, content={'detail': 'HTTPS is required'})
+    if request.url.path.startswith('/api/') and not web_security.trusted_browser_request(request):
+        return JSONResponse(status_code=403, content={'detail': 'Use the application origin for browser requests'})
     if demo_mode.enabled() and not demo_mode.allows(request.method, request.url.path):
         return JSONResponse(status_code=403, content={"detail": demo_mode.MESSAGE})
-    return await call_next(request)
+    response = await call_next(request)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'same-origin'
+    if request.url.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+app.add_middleware(RequestBodyLimitMiddleware)
 
 
 @app.get("/api/demo")
@@ -266,25 +350,40 @@ def demo_status():
 # --- Auth Endpoints ---
 
 @app.post("/api/auth/login")
-def api_auth_login(req: LoginRequest, response: Response):
+def api_auth_login(req: LoginRequest, response: Response, request: Request):
+    delay = auth.reserve_login_attempt(req.username, request.client.host if request.client else 'unknown', int(time.time()))
+    if delay:
+        raise HTTPException(status_code=429, detail='Too many sign-in attempts. Try again shortly.',
+                            headers={'Retry-After': str(delay)})
     user = db.get_user_by_username(req.username)
-    if not user or not auth.verify_password(req.password, user.get("password_hash")):
+    fallback = 'pbkdf2_sha256$600000$00000000000000000000000000000000$' + '0' * 64
+    valid = auth.verify_password(req.password, user.get('password_hash') if user and user.get('password_hash') else fallback)
+    if not user or not valid:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = auth.create_session_token(user["id"])
+    if auth.password_needs_upgrade(user['password_hash']):
+        replacement = auth.hash_password(req.password)
+        if not db.upgrade_password_hash(user['id'], user['password_hash'], replacement):
+            raise HTTPException(status_code=401, detail='Account credentials changed. Sign in again.')
+        user['password_hash'] = replacement
+    try:
+        token = auth.create_session_token(user['id'], user['password_hash'])
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     response.set_cookie(
         auth.SESSION_COOKIE_NAME,
         token,
         max_age=auth.SESSION_TTL_SECONDS,
         httponly=True,
         samesite="lax",
-        secure=False,  # LAN-only deployment; set True behind HTTPS
+        secure=web_security.secure_cookies(),
     )
     ensure_user_dirs(user["username"])
     return {"success": True, "username": user["username"], "display_name": user["display_name"]}
 
 
 @app.post("/api/auth/logout")
-def api_auth_logout(response: Response):
+def api_auth_logout(request: Request, response: Response):
+    auth.revoke_session_token(request.cookies.get(auth.SESSION_COOKIE_NAME))
     response.delete_cookie(auth.SESSION_COOKIE_NAME)
     return {"success": True}
 
@@ -294,84 +393,79 @@ def api_auth_me(user: dict = Depends(get_current_user)):
     return {"username": user["username"], "display_name": user["display_name"]}
 
 # --- Pydantic Models ---
-class ScrapeRequest(BaseModel):
-    keywords: str
-    results_limit: int = 100
-    hours_old: int = 48
-    distance: int = 10
-    source: str = "linkedin-apify" # or "karriere"
-    modelName: Optional[str] = None  # None -> the user's configured model for this purpose
-    tone: Optional[str] = ""
+class ScrapeRequest(ScrapeInput):
+    modelName: Optional[ModelName] = None
+    tone: Optional[Instruction] = ""
 
 class ManualJobRequest(BaseModel):
-    job_url: str = ""
-    title: str = ""
-    company: str = ""
-    location: str = ""
-    description: str = ""
+    job_url: Annotated[str, Field(max_length=8192)] = ""
+    title: ShortText = ""
+    company: ShortText = ""
+    location: ShortText = ""
+    description: SourceText = ""
     save_to_db: bool = True
-    modelName: Optional[str] = None  # None -> the user's configured model for this purpose
-    tone: Optional[str] = ""
-    cv_profile_override: Optional[str] = None
+    modelName: Optional[ModelName] = None  # None -> the user's configured model for this purpose
+    tone: Optional[Instruction] = ""
+    cv_profile_override: Optional[ShortText] = None
     compact: Optional[bool] = False
 
 class JobUpdateRequest(BaseModel):
-    status: Optional[str] = None
-    application_date: Optional[str] = None
-    application_method: Optional[str] = None
-    response_status: Optional[str] = None
-    company_contact: Optional[str] = None
-    title: Optional[str] = None
-    company: Optional[str] = None
-    cv_profile_override: Optional[str] = None
-    company_research: Optional[str] = None
-    company_research_updated_at: Optional[str] = None
+    status: Optional[ShortText] = None
+    application_date: Optional[ShortText] = None
+    application_method: Optional[ShortText] = None
+    response_status: Optional[ShortText] = None
+    company_contact: Optional[ShortText] = None
+    title: Optional[ShortText] = None
+    company: Optional[ShortText] = None
+    cv_profile_override: Optional[ShortText] = None
+    company_research: Optional[SourceText] = None
+    company_research_updated_at: Optional[ShortText] = None
     use_research_in_docs: Optional[bool] = None
 
 class JobResearchRequest(BaseModel):
-    model_name: Optional[str] = None
+    model_name: Optional[ModelName] = None
 
 class GenerateRequest(BaseModel):
-    job_id: str
-    modelName: Optional[str] = None  # None -> the user's configured model for this purpose
-    tone: Optional[str] = ""
-    cv_profile: Optional[str] = None
+    job_id: Identifier
+    modelName: Optional[ModelName] = None  # None -> the user's configured model for this purpose
+    tone: Optional[Instruction] = ""
+    cv_profile: Optional[ShortText] = None
     compact: Optional[bool] = None
-    engine: Optional[str] = None
-    language: Optional[str] = None  # 'en' or 'de'; None -> the user's setting (English for career-record users)
+    engine: Optional[ShortText] = None
+    language: Optional[ShortText] = None  # 'en' or 'de'; None -> the user's setting (English for career-record users)
 
 
 class BatchGenerateRequest(BaseModel):
-    job_ids: List[str]
-    modelName: Optional[str] = None
-    tone: Optional[str] = None
+    job_ids: Annotated[List[Identifier], Field(min_length=1, max_length=MAX_BATCH_JOBS)]
+    modelName: Optional[ModelName] = None
+    tone: Optional[Instruction] = None
     force: Optional[bool] = False
-    cv_profile: Optional[str] = None
+    cv_profile: Optional[ShortText] = None
     compact: Optional[bool] = None
-    engine: Optional[str] = None
+    engine: Optional[ShortText] = None
 
     @field_validator("job_ids")
     @classmethod
     def _validate_job_ids(cls, v: List[str]) -> List[str]:
         if not v:
             raise ValueError("job_ids must not be empty")
-        if len(v) > 300:
+        if len(v) > MAX_BATCH_JOBS:
             raise ValueError("At most 300 jobs per batch")
         return v
 
 
 class RefineIterateRequest(BaseModel):
-    job_id: str
-    document_type: str # 'cv' or 'letter'
-    current_tex: str
-    feedback: str
-    modelName: Optional[str] = None  # None -> the user's configured model for this purpose
-    tone: Optional[str] = ""
+    job_id: Identifier
+    document_type: Literal["cv", "letter"] # 'cv' or 'letter'
+    current_tex: SourceText
+    feedback: Instruction
+    modelName: Optional[ModelName] = None  # None -> the user's configured model for this purpose
+    tone: Optional[Instruction] = ""
 
 class RefineFinalizeRequest(BaseModel):
-    job_id: str
-    cv_tex: str
-    letter_tex: str
+    job_id: Identifier
+    cv_tex: SourceText
+    letter_tex: SourceText
 
 
 def _deep_merge_dict(base: dict, override: dict) -> dict:
@@ -383,59 +477,13 @@ def _deep_merge_dict(base: dict, override: dict) -> dict:
             out[k] = v
     return out
 
-class LinkedinScraperConfig(BaseModel):
-    keywords: str = ""
-    results_limit: int = Field(default=80, ge=1, le=500)
-    hours_old: int = Field(default=24, ge=1, le=720)
-    distance: int = Field(default=10, ge=1, le=200)
 
 
-class KarriereScraperConfig(BaseModel):
-    keywords: Union[List[str], str] = Field(default_factory=list)
-    results_limit: int = Field(default=10, ge=1, le=200)
-    hours_old: Optional[int] = Field(default=24, ge=1, le=720)
-    distance: Optional[int] = Field(default=10, ge=1, le=200)
-
-    @field_validator("keywords", mode="before")
-    @classmethod
-    def coerce_keywords(cls, v: Any):
-        if v is None:
-            return []
-        if isinstance(v, list):
-            return [str(x).strip() for x in v if str(x).strip()]
-        if isinstance(v, str):
-            return [x.strip() for x in v.split(",") if x.strip()]
-        return []
-
-
-class AutoGenerateConfig(BaseModel):
+class ScraperConfigPayload(CollectionConfig):
     model_config = ConfigDict(extra="allow")
-    min_match_score: int = Field(default=65, ge=0, le=100)
-    max_german_level: str = Field(default="B1", max_length=20)
-    tone: str = Field(default="", max_length=20000)
-    document_engine: Literal["latex", "typst"] = "typst"
-    typst_cv_template: str = Field(default="base-cv-moderner.typ", pattern=r"^[\w-]+\.typ$")
-    compact_cv: bool = False
-
-
-class DocumentInstructions(BaseModel):
-    """Per-user extra instructions injected into document generation prompts."""
-    model_config = ConfigDict(extra="allow")
-    cv: str = Field(default="", max_length=4000)
-    cover_letter: str = Field(default="", max_length=4000)
-
-
-class ScraperConfigPayload(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    openrouter_model: str = Field(default="", max_length=200)
-    document_model: str = Field(default="", max_length=200)
-    linkedin: LinkedinScraperConfig = Field(default_factory=LinkedinScraperConfig)
-    karriere: KarriereScraperConfig = Field(default_factory=KarriereScraperConfig)
     auto_generate: AutoGenerateConfig = Field(default_factory=AutoGenerateConfig)
     document_instructions: DocumentInstructions = Field(default_factory=DocumentInstructions)
-    linkedin_location: str = Field(default="", max_length=200)
-    karriere_region: str = Field(default="", max_length=200)
-    denoise_sources: List[str] = Field(default_factory=lambda: list(_scrapers.DEFAULT_DENOISE_SOURCES))
+    denoise_sources: List[ShortText] = Field(max_length=20, default_factory=lambda: list(_scrapers.DEFAULT_DENOISE_SOURCES))
     route_cheapest: bool = False
 
     @field_validator("denoise_sources")
@@ -452,11 +500,10 @@ class ScraperConfigPayload(BaseModel):
 
 def _resolved_safe_path(relative_path: str, root_dir: str) -> str:
     """Resolve relative path and ensure it stays under root_dir (no path traversal)."""
-    root_abs = os.path.abspath(root_dir)
-    candidate = os.path.abspath(os.path.join(root_abs, relative_path))
-    if not candidate.startswith(root_abs + os.sep) and candidate != root_abs:
-        raise HTTPException(status_code=400, detail="Invalid path")
-    return candidate
+    try:
+        return user_assets.contained_path(root_dir, relative_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid path") from exc
 
 
 # --- Storage helpers (thin delegates to db module) ---
@@ -474,6 +521,12 @@ def load_all_jobs(user_id: int) -> pd.DataFrame:
 
 def load_cv_text(username: Optional[str] = None) -> str:
     return load_effective_cv(username)
+
+
+def _require_cv(user: dict) -> None:
+    """Refuse scoring or generation for a user without their own CV (the root file is only an example)."""
+    if not load_cv_text(user.get("username")):
+        raise HTTPException(status_code=400, detail=NO_CV_MESSAGE)
 
 def _make_company_safe(company: str) -> str:
     """Normalise a company name into a filesystem-safe slug.
@@ -526,6 +579,8 @@ def _get_ai_versions(draft_dir: str) -> dict:
                         "cv": data.get("cv", []),
                         "letter": data.get("letter", [])
                     }
+        except OperationTerminated:
+            raise
         except Exception as e:
             logger.warning(f"Failed to read ai_versions.json in {draft_dir}: {e}")
     return {"cv": [], "letter": []}
@@ -535,6 +590,8 @@ def _save_ai_versions(draft_dir: str, versions: dict):
     version_file = os.path.join(draft_dir, "ai_versions.json")
     try:
         atomic_write(version_file, json.dumps(versions, indent=2))
+    except OperationTerminated:
+        raise
     except Exception as e:
         logger.warning(f"Failed to write ai_versions.json in {draft_dir}: {e}")
 
@@ -562,7 +619,7 @@ def _record_initial_document_version(draft_dir: str, doc_type: str, tex: str, en
             _save_ai_versions(draft_dir, versions)
 
 
-def _try_generate_cv_pdf(job_id: str, model_name: str, tone: str, user: dict, cv_profile: Optional[str] = None, compact: Optional[bool] = None, engine: Optional[str] = None, language: Optional[str] = None) -> Optional[str]:
+def _try_generate_cv_pdf(job_id: Identifier, model_name: str, tone: str, user: dict, cv_profile: Optional[str] = None, compact: Optional[bool] = None, engine: Optional[str] = None, language: Optional[str] = None) -> Optional[str]:
     username = user.get('username')
     job = db.get_job_by_id(job_id, user['id'])
     if not job:
@@ -574,19 +631,21 @@ def _try_generate_cv_pdf(job_id: str, model_name: str, tone: str, user: dict, cv
     try:
         from generators import run_ai_prompt
         source = reviewed_documents.generate(job, cv, username, selected_engine, 'cv', profile, model_name, run_ai_prompt, tone=tone, compact=compact, language=language)
+        check()
         result = compile_job_document(job_id, JobDocCompileRequest(document_type='cv', tex=source), user=user)
         if not result['success']:
             return result.get('error', 'Compilation failed')
         safe_id = str(job_id).replace(':', '_').replace(' ', '_')
         folder = os.path.join(user_drafts_dir(username), f"{_make_company_safe(job.get('company', 'Unknown'))}_{safe_id}")
         _record_initial_document_version(folder, 'cv', source, selected_engine)
+        check()
         finalize_job_documents(job_id, JobDocFinalizeRequest(document_type='cv', cv_source=source), user=user)
         return None
     except (ValueError, OSError, HTTPException) as exc:
         return str(getattr(exc, 'detail', exc))
 
 
-def _try_generate_letter_pdf(job_id: str, model_name: str, tone: str, user: dict, engine: Optional[str] = None, language: Optional[str] = None) -> Optional[str]:
+def _try_generate_letter_pdf(job_id: Identifier, model_name: str, tone: str, user: dict, engine: Optional[str] = None, language: Optional[str] = None) -> Optional[str]:
     username = user.get('username')
     job = db.get_job_by_id(job_id, user['id'])
     if not job:
@@ -597,38 +656,43 @@ def _try_generate_letter_pdf(job_id: str, model_name: str, tone: str, user: dict
     try:
         from generators import run_ai_prompt
         source = reviewed_documents.generate(job, cv, username, selected_engine, 'letter', profile, model_name, run_ai_prompt, tone=tone, language=language)
+        check()
         result = compile_job_document(job_id, JobDocCompileRequest(document_type='letter', tex=source), user=user)
         if not result['success']:
             return result.get('error', 'Compilation failed')
         safe_id = str(job_id).replace(':', '_').replace(' ', '_')
         folder = os.path.join(user_drafts_dir(username), f"{_make_company_safe(job.get('company', 'Unknown'))}_{safe_id}")
         _record_initial_document_version(folder, 'letter', source, selected_engine)
+        check()
         finalize_job_documents(job_id, JobDocFinalizeRequest(document_type='letter', letter_source=source), user=user)
         return None
     except (ValueError, OSError, HTTPException) as exc:
         return str(getattr(exc, 'detail', exc))
 
 
-def _run_batch_generate_bg(task_id: str, job_ids: List[str], model_name: str, tone: str, user: dict, force: bool = False, cv_profile: Optional[str] = None, compact: Optional[bool] = None, engine: Optional[str] = None) -> None:
+@operation('collection')
+def _run_batch_generate_bg(task_id: Identifier, job_ids: List[str], model_name: str, tone: str, user: dict, force: bool = False, cv_profile: Optional[str] = None, compact: Optional[bool] = None, engine: Optional[str] = None) -> None:
+    current().add_cancel_check(lambda: bool((db.async_task_get(task_id, user['id']) or {}).get('cancelled')))
+    check()
     total = len(job_ids)
-    db.async_task_update(task_id, total=total, processed=0, failed=0)
+    db.async_task_update(task_id, stage='generating', total=total, processed=0, failed=0)
     cv_text = load_cv_text(user.get("username"))
     if not cv_text:
         db.async_task_update(
             task_id,
             status="failed",
-            result={"success": False, "message": "No CV text (career record or CV-plaintext.txt) found"},
+            result={"success": False, "message": NO_CV_MESSAGE},
         )
         return
 
     processed_ok = 0
     failed_count = 0
     cancelled_mid = False
-    from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
     update_lock = threading.Lock()
 
     def _process_single(jid: str):
+        check()
         st = db.async_task_get_batch_generate(task_id, user["id"])
         if st and st.get("cancelled"):
             return "cancelled"
@@ -639,14 +703,21 @@ def _run_batch_generate_bg(task_id: str, job_ids: List[str], model_name: str, to
         if force or not _outputs_has_cv_pdf(job, user):
             try:
                 err = _try_generate_cv_pdf(jid, model_name, tone, user, cv_profile, compact=compact, engine=engine)
+            except OperationTerminated:
+                raise
             except Exception as exc:
                 err = f"Unexpected error: {exc}"
             if err:
                 logger.error("Batch CV gen failed for %s: %s", jid, err)
                 job_failed = True
+        st = db.async_task_get_batch_generate(task_id, user['id'])
+        if st and st['cancelled']:
+            return 'cancelled'
         if not job_failed and (force or not _outputs_has_letter_pdf(job, user)):
             try:
                 err = _try_generate_letter_pdf(jid, model_name, tone, user, engine=engine)
+            except OperationTerminated:
+                raise
             except Exception as exc:
                 err = f"Unexpected error: {exc}"
             if err:
@@ -655,20 +726,24 @@ def _run_batch_generate_bg(task_id: str, job_ids: List[str], model_name: str, to
         return "failed" if job_failed else "ok"
 
     try:
-        max_workers = 5
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_jid = {executor.submit(_process_single, jid): jid for jid in job_ids}
-            for future in as_completed(future_to_jid):
-                res = future.result()
+        def cancelled():
+            row = db.async_task_get_batch_generate(task_id, user['id'])
+            return bool(row and row['cancelled'])
+
+        max_workers = 2
+        with bounded_results(_process_single, job_ids, max_workers, cancelled=cancelled) as results:
+            for res in results:
                 with update_lock:
                     if res == "cancelled":
                         cancelled_mid = True
-                        break
                     elif res == "failed":
                         failed_count += 1
                     else:
                         processed_ok += 1
                     db.async_task_update(task_id, processed=processed_ok, failed=failed_count)
+        cancelled_mid = cancelled_mid or cancelled()
+    except OperationTerminated:
+        raise
     except Exception as exc:
         logger.exception("Batch generate task %s crashed: %s", task_id, exc)
         db.async_task_update(
@@ -701,6 +776,8 @@ def process_job_with_ai(description: str, cv_text: Optional[str] = None, model_n
     m = _effective_ai_model(model_name, user, purpose="scrape")
     try:
         return _scrapers.process_job_with_ai(description, cv_text, model_name=m, denoise=denoise)
+    except OperationTerminated:
+        raise
     except Exception as e:
         logger.error(f"Error in AI analysis: {e}")
         return {
@@ -748,8 +825,7 @@ def get_jobs(user: dict = Depends(get_current_user)):
     expected_analysis = fingerprint(load_cv_text(username), _effective_ai_model(None, user, purpose='scrape'))
     for job in jobs:
         job['default_document_engine'] = default_engine
-        job['eligibility'] = eligibility(job, policy_config)
-        job['analysis_current'] = (job['analysis_fingerprint'] == expected_analysis) if job.get('analysis_fingerprint') else None
+        apply_rating(job, policy_config, expected_analysis)
         job['qualifies'] = qualifies(job, policy_config, expected_analysis)
         job_id_safe = str(job.get("id", "")).replace(":", "_").replace(" ", "_")
         company_safe = _make_company_safe(job.get("company", "Unknown"))
@@ -767,7 +843,8 @@ def get_jobs(user: dict = Depends(get_current_user)):
 
 
 SUMMARY_FIELDS = ("id", "title", "company", "location", "status", "match_score", "analysis_current",
-                  "date_scraped", "cv_url", "letter_url")
+                  "date_scraped", "cv_url", "letter_url", "analysis_schema", "match_rating", "match_checks",
+                  "preference_conflicts", "judgement_calls", "grounding_status", "grounding_issues")
 
 
 @app.get("/api/jobs/summaries")
@@ -807,8 +884,12 @@ def scrape_new_jobs_sync(req: ScrapeRequest, user: dict, log_fn=None, async_task
     )
 
 
-def _run_scrape_bg(task_id: str, req: ScrapeRequest, user: dict):
+@operation('collection')
+def _run_scrape_bg(task_id: Identifier, req: ScrapeRequest, user: dict):
+    current().add_cancel_check(lambda: bool((db.async_task_get(task_id, user['id']) or {}).get('cancelled')))
+    check()
     user_id = user["id"]
+    db.async_task_update(task_id, stage='collecting')
     def task_logger(msg: str, level: str = "info"):
         db.add_log(msg, level, user_id=user_id)
         db.async_task_append_log(
@@ -823,6 +904,8 @@ def _run_scrape_bg(task_id: str, req: ScrapeRequest, user: dict):
     try:
         res = scrape_new_jobs_sync(req, user, log_fn=task_logger, async_task_id=task_id)
         db.async_task_update(task_id, status="completed" if res.get("success") else "failed", result=res)
+    except OperationTerminated:
+        raise
     except Exception as e:
         task_logger(f"Fatal scrape error: {e}", "error")
         db.async_task_update(
@@ -832,15 +915,13 @@ def _run_scrape_bg(task_id: str, req: ScrapeRequest, user: dict):
         )
 
 @app.post("/api/scrape")
-def api_scrape_start(req: ScrapeRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
-    db.async_task_prune_completed(3600)
-    task_id = str(uuid.uuid4())
-    db.async_task_create(task_id, "scrape", payload=req.model_dump(), user_id=user["id"])
-    background_tasks.add_task(_run_scrape_bg, task_id, req, user)
-    return {"success": True, "task_id": task_id}
+def api_scrape_start(req: ScrapeRequest, user: dict = Depends(get_current_user)):
+    _require_cv(user)
+    return _admit_background('scrape', user, req.model_dump(),
+                             lambda task_id: _run_scrape_bg(task_id, req, user))
 
 @app.get("/api/scrape/status/{task_id}")
-def api_scrape_status(task_id: str, user: dict = Depends(get_current_user)):
+def api_scrape_status(task_id: Identifier, user: dict = Depends(get_current_user)):
     row = db.async_task_get_scrape(task_id, user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -882,24 +963,20 @@ def get_unprocessed_jobs(user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/reprocess")
-def api_reprocess_start(background_tasks: BackgroundTasks, user: dict = Depends(get_current_user), all_scored: bool = False):
-    if all_scored:
-        for job in db.load_all_jobs(user['id']).to_dict(orient='records'):
-            db.update_job_fields(job['id'], user_id=user['id'], processed=0, analysis_state='pending')
-    count = db.get_unprocessed_count(user["id"])
-    if count == 0:
-        return {"success": True, "message": "No unprocessed jobs found.", "task_id": None}
-
-    db.async_task_cancel_running_reprocess(user["id"])
-
-    task_id = str(uuid.uuid4())
-    db.async_task_create(task_id, "reprocess", total=count, user_id=user["id"])
-    background_tasks.add_task(_run_reprocess_bg, task_id, user)
-    return {"success": True, "task_id": task_id, "total": count}
+def api_reprocess_start(user: dict = Depends(get_current_user), all_scored: bool = False, job_id: Identifier | None = None):
+    _require_cv(user)
+    if job_id is not None and not db.get_job_by_id(job_id, user['id']):
+        raise HTTPException(status_code=404, detail='Job not found.')
+    if job_id is not None and all_scored:
+        raise HTTPException(status_code=422, detail='Choose a single job or all jobs.')
+    count = 1 if job_id is not None else db.get_job_count(user['id']) if all_scored else db.get_unprocessed_count(user['id'])
+    payload = {'all_scored': all_scored, **({'job_id': job_id} if job_id is not None else {})}
+    return _admit_background('reprocess', user, payload,
+        lambda task_id: _run_reprocess_bg(task_id, user, all_scored, job_id), total=count)
 
 
 @app.get("/api/reprocess/status/{task_id}")
-def api_reprocess_status(task_id: str, user: dict = Depends(get_current_user)):
+def api_reprocess_status(task_id: Identifier, user: dict = Depends(get_current_user)):
     row = db.async_task_get_reprocess(task_id, user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -921,6 +998,15 @@ def fetch_logs(user: dict = Depends(get_current_user)):
     return db.get_logs(user["id"])
 
 
+@app.get("/api/usage/today")
+def usage_today(user: dict = Depends(get_current_user)):
+    """Read-only: today's model request quota use for the signed-in User (not a monetary ceiling)."""
+    status = model_usage.quota_status(user["id"])
+    report = model_usage.usage_report(user["id"], status["day"])
+    status["coverage"] = report[0] if report else None
+    return status
+
+
 @app.get("/api/config")
 def get_config(user: dict = Depends(get_current_user)):
     cfg_path = resolve_user_path(user.get("username"), "scraper_config.json")
@@ -928,6 +1014,7 @@ def get_config(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="scraper_config.json not found")
     with open(cfg_path, "r", encoding="utf-8") as f:
         config = json.load(f)
+    config = normalize_rating_config(config)
     approved = Path(user_profile_dir(user.get('username')), 'approved', 'cv.tex').exists()
     if approved:
         config.setdefault('auto_generate', {})['document_engine'] = load_document_engine_config(user)[0]
@@ -935,7 +1022,7 @@ def get_config(user: dict = Depends(get_current_user)):
     return config
 
 @app.get("/api/openrouter/models")
-def get_openrouter_models():
+def get_openrouter_models(user: dict = Depends(get_current_user)):
     """Models for the Settings dropdowns: OpenRouter's list, then `custom/…` models. One source
     being unreachable (for example no internet with a local model server) never hides the others."""
     if demo_mode.enabled():
@@ -947,11 +1034,15 @@ def get_openrouter_models():
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode())
             models = [{"id": m["id"], "name": m["name"], "context_length": m.get("context_length")} for m in data.get("data", [])]
+    except OperationTerminated:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch OpenRouter models: {e}")
         error = str(e)
     models += list_custom_models()
-    return {"success": bool(models), "models": models, **({"error": error} if error and not models else {})}
+    return {"success": bool(models), "models": models,
+            'default_verifier_model': reviewed_documents.DEFAULT_VERIFIER_MODEL,
+            **({"error": error} if error and not models else {})}
 
 @app.put("/api/config")
 def save_config(body: dict = Body(...), user: dict = Depends(get_current_user)):
@@ -972,7 +1063,7 @@ def save_config(body: dict = Body(...), user: dict = Depends(get_current_user)):
     try:
         validated = ScraperConfigPayload.model_validate(merged)
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
+        raise HTTPException(status_code=422, detail=json.loads(e.json(include_url=False)))
     out = validated.model_dump(mode="json", exclude_none=True)
     out['auto_generate'].pop('reviewed_baseline', None)
     if Path(user_profile_dir(user.get('username')), 'approved', 'cv.tex').exists() and 'document_engine' in body.get('auto_generate', {}):
@@ -983,7 +1074,7 @@ def save_config(body: dict = Body(...), user: dict = Depends(get_current_user)):
 
 
 class CvTextPayload(BaseModel):
-    content: str = Field(..., max_length=1_000_000)
+    content: SourceText = Field(..., max_length=1_000_000)
 
 class ProfileNotesPayload(BaseModel):
     notes: str = Field(..., max_length=1_000_000)
@@ -1016,17 +1107,26 @@ def get_cv(user: dict = Depends(get_current_user)):
         record, _ = career_record.for_user(username)
         return {"content": career_record.scoring_text(record), "exists": True, "read_only": True,
                 "loaded_from": f"career record ({record_path.name})", "save_path": None}
-    cv_path = resolve_user_path(username, "CV-plaintext.txt")
+    cv_path = own_cv_path(username)
     content = ""
     exists = os.path.exists(cv_path)
     if exists:
         with open(cv_path, "r", encoding="utf-8") as f:
             content = f.read()
+    # The repo-root CV-plaintext.txt is a fictional example: offered as a starting template, never used
+    # as this user's CV.
+    example_path = os.path.join(user_assets.BASE_DIR, "CV-plaintext.txt")
+    template = ""
+    if not content.strip() and os.path.exists(example_path):
+        with open(example_path, "r", encoding="utf-8") as f:
+            template = f.read()
     return {
         "content": content,
         "exists": exists,
-        "loaded_from": _display_path(cv_path),
+        "loaded_from": _display_path(cv_path) if exists else None,
         "save_path": _display_path(_user_asset_save_path(username, "CV-plaintext.txt")),
+        "template": template,
+        "missing_message": None if content.strip() else NO_CV_MESSAGE,
     }
 
 
@@ -1072,46 +1172,19 @@ def save_profile_notes(body: ProfileNotesPayload, user: dict = Depends(get_curre
     return {"success": True, "save_path": _display_path(notes_path)}
 
 
-VALID_THEMES = {
-    "default",
-    "kanagawa-wave",
-    "kanagawa-dragon",
-    "kanagawa-lotus",
-    "catppuccin-mocha",
-    "catppuccin-latte",
-    "rose-pine",
-    "nord",
-}
-
-VALID_FONTS = {
-    "inter",
-    "geist",
-    "plus-jakarta-sans",
-    "dm-sans",
-    "ibm-plex-sans",
-    "manrope",
-}
-
-
 class UiPreferencesPayload(BaseModel):
-    theme: str = Field(default="default", max_length=50)
-    font: str = Field(default="inter", max_length=50)
+    theme: str = Field(default=DEFAULT_THEME, max_length=50)
+    font: str = Field(default=DEFAULT_FONT, max_length=50)
 
     @field_validator("theme")
     @classmethod
     def _validate_theme(cls, v: str) -> str:
-        t = (v or "").strip().lower()
-        if t in VALID_THEMES:
-            return t
-        return "default"
+        return normalize_theme(v)
 
     @field_validator("font")
     @classmethod
     def _validate_font(cls, v: str) -> str:
-        f = (v or "").strip().lower()
-        if f in VALID_FONTS:
-            return f
-        return "inter"
+        return normalize_font(v)
 
 
 @app.get("/api/preferences")
@@ -1123,11 +1196,12 @@ def get_ui_preferences(user: dict = Depends(get_current_user)):
 @app.put("/api/preferences")
 def update_ui_preferences(body: UiPreferencesPayload, user: dict = Depends(get_current_user)):
     username = user.get("username")
-    saved = user_assets.save_ui_preferences(username, body.model_dump())
+    saved = user_assets.save_ui_preferences(username, body.model_dump(exclude_unset=True))
     return {"success": True, "preferences": saved}
 
 
 @app.post("/api/jobs/manual")
+@operation()
 def add_job_manual(req: ManualJobRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     if req.job_url:
@@ -1135,23 +1209,13 @@ def add_job_manual(req: ManualJobRequest, user: dict = Depends(get_current_user)
         if req.job_url in existing_urls:
             raise HTTPException(status_code=400, detail="Job URL already exists.")
 
-    cv_text = load_cv_text(username)
-    if req.save_to_db:
-        model_name = _effective_ai_model(req.modelName, user, purpose="scrape")
-        ai_data = process_job_with_ai(
-            req.description, cv_text, model_name=model_name, user=user,
-            denoise=_scrapers.denoise_enabled(username, "manual"),
-        )
-    else:
-        ai_data = {
-            "german_level": "none",
-            "requires_german": False,
-            "salary": "Not Specified",
-            "salary_yearly": None,
-            "skills": "Not Specified",
-            "summary": "One-off Draft (No AI Preprocessing)",
-            "match_score": None
-        }
+    ai_data = {
+        'analysis_state': 'pending' if req.save_to_db else 'complete',
+        'german_level': 'unknown' if req.save_to_db else 'none', 'requires_german': False,
+        'salary': 'Not Specified', 'salary_yearly': None, 'skills': 'Not Specified',
+        'summary': 'Analysis pending' if req.save_to_db else 'One-off Draft (No AI Preprocessing)',
+        'match_score': None,
+    }
 
     new_job = {
         **ai_data,
@@ -1188,30 +1252,48 @@ def add_job_manual(req: ManualJobRequest, user: dict = Depends(get_current_user)
         'match_analysis': ai_data.get("match_analysis", {}),
         'date_scraped': datetime.now().strftime("%Y-%m-%d"),
         'source': 'manual',
-        'processed': 0 if ai_data.get('analysis_state') == 'failed' else 1,
+        'processed': 0 if ai_data.get('analysis_state') in ('pending', 'failed') else 1,
         'cv_profile_override': normalize_profile(req.cv_profile_override, username),
     }
 
     # Both save_to_db=True and one-off jobs go into the same DB now
     db.upsert_job(new_job, user_id=user["id"], is_one_off=not req.save_to_db)
+    if req.save_to_db:
+        try:
+            check()
+            cv_text = load_cv_text(username)
+            if not cv_text:  # Saved, not scored: scoring against the example CV would be misleading.
+                ai_data = {'analysis_state': 'failed', 'analysis_error': NO_CV_MESSAGE}
+            else:
+                ai_data = process_job_with_ai(req.description, cv_text,
+                    model_name=_effective_ai_model(req.modelName, user, purpose='scrape'), user=user,
+                    denoise=_scrapers.denoise_enabled(username, 'manual'))
+            check()
+        except OperationTerminated as exc:
+            ai_data = {'analysis_state': 'failed', 'analysis_error': str(exc)}
+        updates = {**ai_data, 'processed': 0 if ai_data.get('analysis_state') == 'failed' else 1}
+        db.update_job_fields(new_job['id'], user_id=user['id'], **updates)
+        new_job.update(updates)
+    apply_rating(new_job, load_user_config_dict(user), fingerprint(load_cv_text(username),
+        _effective_ai_model(None, user, purpose='scrape')))
     return {"success": ai_data.get('analysis_state') != 'failed',
             "saved": True, "message": "Posting saved; analysis failed and can be retried." if ai_data.get('analysis_state') == 'failed' else "Manual job added.",
+            "error": ai_data.get('analysis_error') if ai_data.get('analysis_state') == 'failed' else None,
             "job_id": new_job['id'], "job": new_job}
 
 @app.get("/api/jobs/{job_id}")
-def get_job_detail(job_id: str, user: dict = Depends(get_current_user)):
+def get_job_detail(job_id: Identifier, user: dict = Depends(get_current_user)):
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
-    job['analysis_current'] = (job['analysis_fingerprint'] == fingerprint(load_cv_text(user.get('username')),
-        _effective_ai_model(None, user, purpose='scrape'))) if job.get('analysis_fingerprint') else None
     job['default_document_engine'] = load_document_engine_config(user)[0]
-    job['eligibility'] = eligibility(job, load_user_config_dict(user))
+    apply_rating(job, load_user_config_dict(user), fingerprint(load_cv_text(user.get('username')),
+        _effective_ai_model(None, user, purpose='scrape')))
     return {"success": True, "job": _sanitize_for_json(job)}
 
 
 @app.get("/api/jobs/{job_id}/published-documents")
-def get_published_documents(job_id: str, user: dict = Depends(get_current_user)):
+def get_published_documents(job_id: Identifier, user: dict = Depends(get_current_user)):
     """The job's newest CV and letter PDFs, read-only (no folders created, nothing rendered); the same links
     the Jobs list shows. Used by the MCP server, which must not call the documents editor route."""
     job = db.get_job_by_id(job_id, user["id"])
@@ -1238,8 +1320,9 @@ def get_published_documents(job_id: str, user: dict = Depends(get_current_user))
             "revision": revision, "finalized": revision is not None}
 
 @app.post("/api/jobs/{job_id}/research")
+@operation()
 def research_job_company(
-    job_id: str,
+    job_id: Identifier,
     req: Optional[JobResearchRequest] = None,
     user: dict = Depends(get_current_user),
 ):
@@ -1260,6 +1343,8 @@ def research_job_company(
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             cfg = {}
 
@@ -1271,8 +1356,10 @@ def research_job_company(
             role_title=title,
             description=description,
             model_name=model,
-            label=f"sonar-{company[:20]}",
+            label="Company research",
         )
+    except OperationTerminated:
+        raise
     except Exception as e:
         logger.error(f"Failed to research company '{company}': {e}")
         raise HTTPException(status_code=500, detail=f"Failed to research company: {str(e)}")
@@ -1298,7 +1385,7 @@ def research_job_company(
     }
 
 @app.put("/api/jobs/{job_id}")
-def update_job(job_id: str, req: JobUpdateRequest, user: dict = Depends(get_current_user)):
+def update_job(job_id: Identifier, req: JobUpdateRequest, user: dict = Depends(get_current_user)):
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
@@ -1327,13 +1414,14 @@ def delete_all_jobs(user: dict = Depends(get_current_user)):
     return {"success": True}
 
 @app.delete("/api/jobs/{job_id}")
-def delete_single_job(job_id: str, user: dict = Depends(get_current_user)):
+def delete_single_job(job_id: Identifier, user: dict = Depends(get_current_user)):
     """Delete one job of the logged-in user (any status)."""
     if not db.delete_job(job_id, user["id"]):
         raise HTTPException(status_code=404, detail="Job not found")
     return {"success": True}
 
 @app.post("/api/generate/cv")
+@operation()
 def generate_cv(req: GenerateRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     cfg_model, cfg_tone = load_generation_config(user)
@@ -1346,7 +1434,7 @@ def generate_cv(req: GenerateRequest, user: dict = Depends(get_current_user)):
     err = _try_generate_cv_pdf(req.job_id, model_name, tone or "", user, selection["profile"], compact=req.compact, engine=req.engine, language=req.language)
     if err == "Job not found":
         raise HTTPException(status_code=404, detail=err)
-    if err == "CV-plaintext.txt not found":
+    if err == NO_CV_MESSAGE:
         raise HTTPException(status_code=400, detail=err)
     if err:
         raise HTTPException(status_code=500, detail=err)
@@ -1361,6 +1449,7 @@ def generate_cv(req: GenerateRequest, user: dict = Depends(get_current_user)):
     return {"success": True, "filename": pdf_filename, "download_url": download_url, "cv_profile": selection["profile"], "cv_profile_label": profile_label(selection["profile"], username), "cv_profile_confidence": selection["confidence"], "cv_profile_reason": selection["reason"]}
 
 @app.post("/api/generate/letter")
+@operation()
 def generate_letter(req: GenerateRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     cfg_model, cfg_tone = load_generation_config(user)
@@ -1369,7 +1458,7 @@ def generate_letter(req: GenerateRequest, user: dict = Depends(get_current_user)
     err = _try_generate_letter_pdf(req.job_id, model_name, tone or "", user, engine=req.engine, language=req.language)
     if err == "Job not found":
         raise HTTPException(status_code=404, detail=err)
-    if err == "CV-plaintext.txt not found":
+    if err == NO_CV_MESSAGE:
         raise HTTPException(status_code=400, detail=err)
     if err:
         raise HTTPException(status_code=500, detail=err)
@@ -1385,27 +1474,23 @@ def generate_letter(req: GenerateRequest, user: dict = Depends(get_current_user)
 
 
 @app.post("/api/generate/batch")
-def api_batch_generate_start(req: BatchGenerateRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
-    db.async_task_prune_completed(3600)
-    db.async_task_cancel_running_batch_generate(user["id"])
-    task_id = str(uuid.uuid4())
+def api_batch_generate_start(req: BatchGenerateRequest, user: dict = Depends(get_current_user)):
     cfg_model, cfg_tone = load_generation_config(user)
     model_name = _effective_ai_model(req.modelName, user)
     tone = req.tone if (req.tone is not None and str(req.tone).strip()) else cfg_tone
-    n = len(req.job_ids)
-    db.async_task_create(
-        task_id,
-        "batch_generate",
-        total=n,
-        payload=req.model_dump(),
-        user_id=user["id"],
-    )
-    background_tasks.add_task(_run_batch_generate_bg, task_id, req.job_ids, model_name, tone, user, bool(req.force), normalize_profile(req.cv_profile, user.get("username")), req.compact, req.engine)
-    return {"success": True, "task_id": task_id, "total": n}
+    profile = normalize_profile(req.cv_profile, user.get('username'))
+    engine = req.engine or load_document_engine_config(user)[0]
+    job_ids = list(dict.fromkeys(req.job_ids))
+    _require_cv(user)
+    payload = {**req.model_dump(), 'modelName': model_name, 'tone': tone,
+               'cv_profile': profile, 'engine': engine, 'job_ids': sorted(job_ids), 'force': bool(req.force)}
+    return _admit_background('batch_generate', user, payload,
+        lambda task_id: _run_batch_generate_bg(task_id, job_ids, model_name, tone, user,
+            bool(req.force), profile, req.compact, engine), total=len(job_ids))
 
 
 @app.get("/api/generate/batch/status/{task_id}")
-def api_batch_generate_status(task_id: str, user: dict = Depends(get_current_user)):
+def api_batch_generate_status(task_id: Identifier, user: dict = Depends(get_current_user)):
     row = db.async_task_get_batch_generate(task_id, user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1423,8 +1508,16 @@ def api_batch_generate_active(user: dict = Depends(get_current_user)):
 
 @app.post("/api/generate/batch/cancel")
 def api_batch_generate_cancel(user: dict = Depends(get_current_user)):
-    db.async_task_cancel_running_batch_generate(user["id"])
+    _background_queue().cancel(user['id'], kind='batch_generate')
     return {"success": True}
+
+
+@app.post('/api/tasks/{task_id}/cancel')
+def api_task_cancel(task_id: Identifier, user: dict = Depends(get_current_user)):
+    if not db.async_task_get(task_id, user['id']):
+        raise HTTPException(status_code=404, detail='Task not found')
+    _background_queue().cancel(user['id'], task_id=task_id)
+    return {'success': True, **db.async_task_get(task_id, user['id'])}
 
 @app.get("/api/cv-profiles")
 def get_cv_profiles(user: dict = Depends(get_current_user)):
@@ -1484,6 +1577,8 @@ def _download_name(username: Optional[str], basename: str) -> str:
         return basename
     try:
         cv_text = load_cv_text(username)
+    except OperationTerminated:
+        raise
     except Exception:
         cv_text = None
     return reviewed_documents.download_name(username, basename, cv_text)
@@ -1501,11 +1596,11 @@ def download_pdf(filepath: str, user: dict = Depends(get_current_user)):
     )
 
 class RefineStartRequest(BaseModel):
-    job_id: str
-    doc_type: str = "all" # 'cv', 'letter', or 'all'
-    modelName: Optional[str] = None  # None -> the user's configured model for this purpose
-    tone: Optional[str] = ""
-    cv_profile: Optional[str] = None
+    job_id: Identifier
+    doc_type: Literal["cv", "letter", "all"] = "all" # 'cv', 'letter', or 'all'
+    modelName: Optional[ModelName] = None  # None -> the user's configured model for this purpose
+    tone: Optional[Instruction] = ""
+    cv_profile: Optional[ShortText] = None
     compact: Optional[bool] = False
     force: Optional[bool] = False
 
@@ -1521,10 +1616,13 @@ def get_available_versions(job_id_safe: str, doc_type: str, draft_dir: str) -> L
                 if v_str.isdigit():
                     versions.append(int(v_str))
         return sorted(versions)
+    except OperationTerminated:
+        raise
     except Exception:
         return []
 
 @app.post("/api/refine/start")
+@operation()
 def refine_start(req: RefineStartRequest, user: dict = Depends(get_current_user)):
     """Compatibility adapter to the reviewed generation/publication pipeline."""
     errors = []
@@ -1544,6 +1642,7 @@ def refine_start(req: RefineStartRequest, user: dict = Depends(get_current_user)
             'cv_url': result.get('cv_download_url'), 'letter_url': result.get('cl_download_url')}
 
 @app.post("/api/refine/iterate")
+@operation()
 def refine_iterate(req: RefineIterateRequest, user: dict = Depends(get_current_user)):
     result = ai_edit_job_document(req.job_id, JobDocAiEditRequest(
         document_type=req.document_type, tex=req.current_tex,
@@ -1553,11 +1652,12 @@ def refine_iterate(req: RefineIterateRequest, user: dict = Depends(get_current_u
 
 
 class RefineDiffRequest(BaseModel):
-    job_id: str
-    document_type: str # 'cv' or 'letter'
-    target_version: int
+    job_id: Identifier
+    document_type: Literal["cv", "letter"] # 'cv' or 'letter'
+    target_version: int = Field(ge=0, le=1_000_000)
 
 @app.post("/api/refine/diff")
+@operation()
 def refine_diff(req: RefineDiffRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     job = db.get_job_by_id(req.job_id, user["id"])
@@ -1601,9 +1701,11 @@ def refine_diff(req: RefineDiffRequest, user: dict = Depends(get_current_user)):
     }
 
 @app.post("/api/refine/finalize")
+@operation()
 def refine_finalize(req: RefineFinalizeRequest, user: dict = Depends(get_current_user)):
     for kind, source in (('cv', req.cv_tex), ('letter', req.letter_tex)):
         if source and source.strip():
+            check()
             result = compile_job_document(req.job_id, JobDocCompileRequest(document_type=kind, tex=source), user=user)
             if not result.get('success'):
                 raise HTTPException(status_code=422, detail=result.get('error', 'Compilation failed'))
@@ -1615,29 +1717,30 @@ def refine_finalize(req: RefineFinalizeRequest, user: dict = Depends(get_current
 # ---------------------------------------------------------------------------
 
 class JobDocCompileRequest(BaseModel):
-    document_type: str = "cv"  # "cv" or "letter"
-    tex: str
-    pdf_base64: Optional[str] = None
+    document_type: Literal["cv", "letter"] = "cv"  # "cv" or "letter"
+    tex: SourceText
+    pdf_base64: Optional[PdfBase64] = None
 
 class JobDocAiEditRequest(BaseModel):
-    document_type: str = "cv"  # "cv" or "letter"
-    tex: str
-    instruction: str
-    selection: Optional[str] = None
-    model_name: Optional[str] = None
+    document_type: Literal["cv", "letter"] = "cv"  # "cv" or "letter"
+    tex: SourceText
+    instruction: Instruction
+    selection: Optional[SourceText] = None
+    model_name: Optional[ModelName] = None
 
 class JobDocRestoreVersionRequest(BaseModel):
-    document_type: str = "cv"  # "cv" or "letter"
-    version_id: str
+    document_type: Literal["cv", "letter"] = "cv"  # "cv" or "letter"
+    version_id: Identifier
 
 class JobDocFinalizeRequest(BaseModel):
-    document_type: str = "all"  # "cv", "letter", or "all"
-    cv_pdf_base64: Optional[str] = None
-    letter_pdf_base64: Optional[str] = None
-    cv_source: Optional[str] = None
-    letter_source: Optional[str] = None
+    document_type: Literal["cv", "letter", "all"] = "all"  # "cv", "letter", or "all"
+    cv_pdf_base64: Optional[PdfBase64] = None
+    letter_pdf_base64: Optional[PdfBase64] = None
+    cv_source: Optional[SourceText] = None
+    letter_source: Optional[SourceText] = None
 @app.get("/api/jobs/{job_id}/documents")
-def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
+@operation()
+def get_job_documents(job_id: Identifier, user: dict = Depends(get_current_user)):
     username = user.get("username")
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
@@ -1668,6 +1771,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
             with open(cv_typ_path, "r", encoding="utf-8") as f:
                 cv_tex = f.read()
             cv_engine = "typst"
+        except OperationTerminated:
+            raise
         except Exception:
             pass
     elif os.path.exists(cv_tex_path):
@@ -1675,12 +1780,16 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
             with open(cv_tex_path, "r", encoding="utf-8") as f:
                 cv_tex = f.read()
             cv_engine = "latex"
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
     if not os.path.exists(cv_draft_pdf) and os.path.exists(cv_out_pdf):
         try:
             shutil.copy2(cv_out_pdf, cv_draft_pdf)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -1712,6 +1821,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
             with open(cl_typ_path, "r", encoding="utf-8") as f:
                 cl_tex = f.read()
             cl_engine = "typst"
+        except OperationTerminated:
+            raise
         except Exception:
             pass
     elif os.path.exists(cl_tex_path):
@@ -1719,12 +1830,16 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
             with open(cl_tex_path, "r", encoding="utf-8") as f:
                 cl_tex = f.read()
             cl_engine = "latex"
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
     if not os.path.exists(cl_draft_pdf) and os.path.exists(cl_out_pdf):
         try:
             shutil.copy2(cl_out_pdf, cl_draft_pdf)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -1775,6 +1890,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
                 with open(cv_v0_typ, "r", encoding="utf-8") as f:
                     initial_cv_tex = f.read()
                 initial_cv_engine = "typst"
+            except OperationTerminated:
+                raise
             except Exception:
                 pass
         elif os.path.exists(cv_v0_tex):
@@ -1782,6 +1899,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
                 with open(cv_v0_tex, "r", encoding="utf-8") as f:
                     initial_cv_tex = f.read()
                 initial_cv_engine = "latex"
+            except OperationTerminated:
+                raise
             except Exception:
                 pass
         _record_initial_document_version(draft_dir, "cv", initial_cv_tex or cv_tex, initial_cv_engine)
@@ -1796,6 +1915,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
                 with open(cl_v0_typ, "r", encoding="utf-8") as f:
                     initial_cl_tex = f.read()
                 initial_cl_engine = "typst"
+            except OperationTerminated:
+                raise
             except Exception:
                 pass
         elif os.path.exists(cl_v0_tex):
@@ -1803,6 +1924,8 @@ def get_job_documents(job_id: str, user: dict = Depends(get_current_user)):
                 with open(cl_v0_tex, "r", encoding="utf-8") as f:
                     initial_cl_tex = f.read()
                 initial_cl_engine = "latex"
+            except OperationTerminated:
+                raise
             except Exception:
                 pass
         _record_initial_document_version(draft_dir, "letter", initial_cl_tex or cl_tex, initial_cl_engine)
@@ -1840,7 +1963,8 @@ def _job_document_operation(function):
 
 
 @app.post("/api/jobs/{job_id}/documents/compile")
-def compile_job_document(job_id: str, req: JobDocCompileRequest, user: dict = Depends(get_current_user)):
+@operation()
+def compile_job_document(job_id: Identifier, req: JobDocCompileRequest, user: dict = Depends(get_current_user)):
     job = db.get_job_by_id(job_id, user['id'])
     if not job:
         raise HTTPException(status_code=404, detail='Job not found')
@@ -1892,7 +2016,8 @@ def compile_job_document(job_id: str, req: JobDocCompileRequest, user: dict = De
 
 @app.post("/api/jobs/{job_id}/documents/ai-edit")
 @_job_document_operation
-def ai_edit_job_document(job_id: str, req: JobDocAiEditRequest, user: dict = Depends(get_current_user)):
+@operation()
+def ai_edit_job_document(job_id: Identifier, req: JobDocAiEditRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
@@ -1924,6 +2049,8 @@ def ai_edit_job_document(job_id: str, req: JobDocAiEditRequest, user: dict = Dep
             )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except OperationTerminated:
+        raise
     except Exception as e:
         logger.error(f"AI surgical edit error for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"AI edit failed: {e}")
@@ -1995,7 +2122,8 @@ def ai_edit_job_document(job_id: str, req: JobDocAiEditRequest, user: dict = Dep
 
 @app.post("/api/jobs/{job_id}/documents/restore-version")
 @_job_document_operation
-def restore_job_document_version(job_id: str, req: JobDocRestoreVersionRequest, user: dict = Depends(get_current_user)):
+@operation()
+def restore_job_document_version(job_id: Identifier, req: JobDocRestoreVersionRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
@@ -2034,7 +2162,8 @@ def restore_job_document_version(job_id: str, req: JobDocRestoreVersionRequest, 
             'active_version_id': str(target_version['id'])}
 
 @app.post("/api/jobs/{job_id}/documents/finalize")
-def finalize_job_documents(job_id: str, req: JobDocFinalizeRequest, user: dict = Depends(get_current_user)):
+@operation()
+def finalize_job_documents(job_id: Identifier, req: JobDocFinalizeRequest, user: dict = Depends(get_current_user)):
     job = db.get_job_by_id(job_id, user['id'])
     if not job:
         raise HTTPException(status_code=404, detail='Job not found')
@@ -2066,6 +2195,7 @@ def finalize_job_documents(job_id: str, req: JobDocFinalizeRequest, user: dict =
                 raise HTTPException(status_code=409, detail=f'{kind}: PDF is stale or unverified. Compile first.')
             if not manifest['verified']:
                 # Browser bytes are previews, not proof of source/PDF correspondence.
+                check()
                 result = compile_job_document(job_id, JobDocCompileRequest(document_type=kind, tex=source), user=user)
                 manifest = matching_build(pdf, source)
                 if not result['success'] or not manifest or not manifest['verified']:
@@ -2097,7 +2227,7 @@ def finalize_job_documents(job_id: str, req: JobDocFinalizeRequest, user: dict =
         return {'success': True, 'revision': revision, **urls}
 
 class FetchJobUrlRequest(BaseModel):
-    url: str
+    url: Annotated[str, Field(max_length=8192)]
 
 @app.post("/api/fetch-job-url")
 def fetch_job_url(req: FetchJobUrlRequest, user: dict = Depends(get_current_user)):
@@ -2113,6 +2243,8 @@ def fetch_job_url(req: FetchJobUrlRequest, user: dict = Depends(get_current_user
         resp = safe_fetch.fetch_page(req.url)
     except safe_fetch.UnsafeURL as e:
         raise HTTPException(status_code=400, detail=f"This link cannot be fetched: {e}")
+    except OperationTerminated:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {e}")
 
@@ -2180,7 +2312,7 @@ def list_daily_dates(user: dict = Depends(get_current_user)):
 @app.get("/api/daily-results/{date}")
 def get_daily_results(date: str, user: dict = Depends(get_current_user)):
     """
-    Return current analysed jobs matching the user's score and eligibility policy on {date}.
+    Return current analysed jobs matching the user's rating and eligibility policy on {date}.
     Annotates each job with cv_url / letter_url if auto-generated PDFs exist in outputs/.
     """
     df = db.load_jobs_by_date(user["id"], date)
@@ -2224,11 +2356,12 @@ def get_daily_results(date: str, user: dict = Depends(get_current_user)):
 
         job_out = row.to_dict()
         job_out = {k: (None if (isinstance(v, float) and pd.isna(v)) else v) for k, v in job_out.items()}
+        apply_rating(job_out, policy_config, expected_analysis)
         job_out["cv_url"] = cv_url
         job_out["letter_url"] = letter_url
         qualifying.append(job_out)
 
-    qualifying.sort(key=lambda j: int(j.get("match_score") or 0), reverse=True)
+    qualifying.sort(key=rating_sort_key, reverse=True)
     return {"date": date, "jobs": qualifying}
 
 
@@ -2238,13 +2371,20 @@ def get_stats(user: dict = Depends(get_current_user)):
     if df.empty:
         return {
             "total_jobs": 0, "avg_match_score": None,
-            "match_score_distribution": [], "source_breakdown": [],
+            "match_score_distribution": [], "match_rating_distribution": [], "rated_jobs": 0, "source_breakdown": [],
             "jobs_per_day": [], "status_funnel": []
         }
 
     df = df.astype(object).where(pd.notna(df), None)
 
-    # Match score distribution
+    current_jobs = get_jobs(user=user)
+    rating_counts = {label: 0 for label in ('Great', 'Good', 'Decent', 'Stretch', 'Poor', 'Blocked', 'Unrated')}
+    for job in current_jobs:
+        if job.get('analysis_current') is True and job.get('match_rating') in rating_counts:
+            rating_counts[job['match_rating']] += 1
+    rating_dist = [{'rating': label, 'count': count} for label, count in rating_counts.items()]
+
+    # Historical numeric score distribution retained for older clients.
     bins = [0, 20, 40, 60, 80, 100]
     labels = ["0-20", "21-40", "41-60", "61-80", "81-100"]
     scores = pd.to_numeric(df["match_score"], errors="coerce").dropna()
@@ -2274,6 +2414,8 @@ def get_stats(user: dict = Depends(get_current_user)):
     return {
         "total_jobs": len(df),
         "avg_match_score": avg_score,
+        "match_rating_distribution": rating_dist,
+        "rated_jobs": sum(count for label, count in rating_counts.items() if label != 'Unrated'),
         "match_score_distribution": match_dist,
         "source_breakdown": source_breakdown,
         "jobs_per_day": jobs_per_day,
@@ -2383,29 +2525,29 @@ def _studio_operation(function):
 # --- CV Studio (Documents Workspace) Models & Endpoints ---
 
 class CreateDocumentRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=200)
-    doc_type: str = Field(default="cv")  # "cv" or "letter"
-    engine: Optional[str] = None  # "typst" or "latex"
-    template_source: Optional[str] = None
-    content: Optional[str] = None
+    title: ShortText = Field(..., min_length=1, max_length=200)
+    doc_type: Literal['cv', 'letter'] = 'cv'
+    engine: Optional[Literal['typst', 'latex']] = None
+    template_source: Optional[ShortText] = None
+    content: Optional[SourceText] = None
 
 class UpdateDocumentRequest(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    pdf_base64: Optional[str] = None
-    expected_source_hash: Optional[str] = None
+    title: Optional[ShortText] = None
+    content: Optional[SourceText] = None
+    pdf_base64: Optional[PdfBase64] = None
+    expected_source_hash: Optional[Identifier] = None
 
 class CompileDocumentRequest(BaseModel):
-    content: Optional[str] = None
-    pdf_base64: Optional[str] = None
-    expected_source_hash: Optional[str] = None
+    content: Optional[SourceText] = None
+    pdf_base64: Optional[PdfBase64] = None
+    expected_source_hash: Optional[Identifier] = None
 
 class AiEditDocumentRequest(BaseModel):
-    instruction: str = Field(..., min_length=1)
-    selection: Optional[str] = None
-    modelName: Optional[str] = None
-    content: Optional[str] = None
-    expected_source_hash: Optional[str] = None
+    instruction: Instruction = Field(..., min_length=1)
+    selection: Optional[SourceText] = None
+    modelName: Optional[ModelName] = None
+    content: Optional[SourceText] = None
+    expected_source_hash: Optional[Identifier] = None
 
 
 @app.get("/api/documents/templates")
@@ -2425,7 +2567,10 @@ def list_available_templates(user: dict = Depends(get_current_user)):
         {"id": "base-cl-tex/main.tex", "title": "[LaTeX] Modern Cover Letter Template", "doc_type": "letter", "engine": "latex"},
     ]
     for cand in candidates:
-        resolved = resolve_user_path(username, cand["id"])
+        try:
+            resolved = resolve_user_path(username, cand["id"])
+        except ValueError:
+            continue  # An escaping symlink is not an available template.
         if os.path.exists(resolved):
             templates.append({
                 "id": cand["id"],
@@ -2455,6 +2600,8 @@ def list_studio_documents(user: dict = Depends(get_current_user)):
             try:
                 with open(meta_file, "r", encoding="utf-8") as f:
                     meta = json.load(f)
+            except OperationTerminated:
+                raise
             except Exception:
                 meta = {}
 
@@ -2497,10 +2644,20 @@ def list_studio_documents(user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/documents")
+@operation()
 def create_studio_document(req: CreateDocumentRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     docs_dir = user_documents_dir(username)
     ensure_user_dirs(username)
+
+    template = None
+    if req.template_source:
+        template = next((t for t in list_available_templates(user=user)['templates']
+                         if t['id'] == req.template_source), None)
+        if template is None:
+            raise HTTPException(status_code=400, detail='Select an available document template')
+        if req.engine and req.engine != template['engine']:
+            raise HTTPException(status_code=400, detail='The document engine must match its template')
 
     slug = re.sub(r'[^a-zA-Z0-9_-]', '_', req.title.lower()).strip('_')
     if not slug:
@@ -2510,7 +2667,7 @@ def create_studio_document(req: CreateDocumentRequest, user: dict = Depends(get_
     os.makedirs(doc_dir, exist_ok=True)
 
     # Determine engine
-    engine = req.engine
+    engine = req.engine or (template['engine'] if template else None)
     if not engine:
         if (req.template_source and req.template_source.endswith(".typ")) or (
             req.content and ("#set " in req.content or "#let " in req.content)
@@ -2623,7 +2780,8 @@ Built scalable web applications and automated data workflows.
 
 
 @app.get("/api/documents/{doc_id}")
-def get_studio_document(doc_id: str, user: dict = Depends(get_current_user)):
+@operation()
+def get_studio_document(doc_id: Identifier, user: dict = Depends(get_current_user)):
     username = user.get("username")
     doc_dir = _resolved_safe_path(doc_id, user_documents_dir(username))
     if not os.path.exists(doc_dir) or not os.path.isdir(doc_dir):
@@ -2635,6 +2793,8 @@ def get_studio_document(doc_id: str, user: dict = Depends(get_current_user)):
         try:
             with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -2672,6 +2832,8 @@ def get_studio_document(doc_id: str, user: dict = Depends(get_current_user)):
         try:
             with open(err_file, "r", encoding="utf-8") as f:
                 error_diag = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -2694,7 +2856,8 @@ def get_studio_document(doc_id: str, user: dict = Depends(get_current_user)):
 
 @app.put("/api/documents/{doc_id}")
 @_studio_operation
-def update_studio_document(doc_id: str, req: UpdateDocumentRequest, user: dict = Depends(get_current_user)):
+@operation()
+def update_studio_document(doc_id: Identifier, req: UpdateDocumentRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     doc_dir = _resolved_safe_path(doc_id, user_documents_dir(username))
     if not os.path.exists(doc_dir) or not os.path.isdir(doc_dir):
@@ -2706,6 +2869,8 @@ def update_studio_document(doc_id: str, req: UpdateDocumentRequest, user: dict =
         try:
             with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -2731,6 +2896,8 @@ def update_studio_document(doc_id: str, req: UpdateDocumentRequest, user: dict =
                     os.remove(err_file)
                 except OSError:
                     pass
+        except OperationTerminated:
+            raise
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Could not save PDF: {e}") from e
 
@@ -2739,7 +2906,8 @@ def update_studio_document(doc_id: str, req: UpdateDocumentRequest, user: dict =
 
 @app.post("/api/documents/{doc_id}/compile")
 @_studio_operation
-def compile_studio_document_api(doc_id: str, req: CompileDocumentRequest = None, user: dict = Depends(get_current_user)):
+@operation()
+def compile_studio_document_api(doc_id: Identifier, req: CompileDocumentRequest = None, user: dict = Depends(get_current_user)):
     username = user.get("username")
     doc_dir = _resolved_safe_path(doc_id, user_documents_dir(username))
     if not os.path.exists(doc_dir) or not os.path.isdir(doc_dir):
@@ -2751,6 +2919,8 @@ def compile_studio_document_api(doc_id: str, req: CompileDocumentRequest = None,
         try:
             with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -2790,6 +2960,8 @@ def compile_studio_document_api(doc_id: str, req: CompileDocumentRequest = None,
                 "preview_urls": preview_urls,
                 "error": None,
             }
+        except OperationTerminated:
+            raise
         except Exception as e:
             return {
                 "success": False,
@@ -2835,7 +3007,8 @@ def compile_studio_document_api(doc_id: str, req: CompileDocumentRequest = None,
 
 @app.post("/api/documents/{doc_id}/ai-edit")
 @_studio_operation
-def ai_edit_studio_document(doc_id: str, req: AiEditDocumentRequest, user: dict = Depends(get_current_user)):
+@operation()
+def ai_edit_studio_document(doc_id: Identifier, req: AiEditDocumentRequest, user: dict = Depends(get_current_user)):
     username = user.get("username")
     doc_dir = _resolved_safe_path(doc_id, user_documents_dir(username))
     if not os.path.exists(doc_dir) or not os.path.isdir(doc_dir):
@@ -2847,6 +3020,8 @@ def ai_edit_studio_document(doc_id: str, req: AiEditDocumentRequest, user: dict 
         try:
             with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
+        except OperationTerminated:
+            raise
         except Exception:
             pass
 
@@ -2880,6 +3055,7 @@ def ai_edit_studio_document(doc_id: str, req: AiEditDocumentRequest, user: dict 
     if not new_code:
         raise HTTPException(status_code=500, detail=f"AI edit failed to produce valid {engine.title()}")
 
+    check()
     atomic_write(source_path, new_code)
 
     compile_ok, compile_log = compile_studio_document(doc_dir)
@@ -2919,7 +3095,7 @@ def ai_edit_studio_document(doc_id: str, req: AiEditDocumentRequest, user: dict 
 
 
 @app.delete("/api/documents/{doc_id}")
-def delete_studio_document(doc_id: str, user: dict = Depends(get_current_user)):
+def delete_studio_document(doc_id: Identifier, user: dict = Depends(get_current_user)):
     username = user.get("username")
     doc_dir = _resolved_safe_path(doc_id, user_documents_dir(username))
     if not os.path.exists(doc_dir) or not os.path.isdir(doc_dir):

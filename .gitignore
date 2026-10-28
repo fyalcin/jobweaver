@@ -36,6 +36,8 @@ webapp/dist/
 .DS_Store
 # Session signing secret (auto-generated)
 .session_secret
+.jobweaver-backend.lock
+.jobweaver-capacity/
 
 # Career records live outside this repository (ADR-0004); a profile may link to one.
 profiles/*/career_record.yaml

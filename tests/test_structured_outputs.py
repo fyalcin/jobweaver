@@ -1,3 +1,4 @@
+from model_transport_fixture import inline_transport
 import json
 import unittest
 from unittest import mock
@@ -24,7 +25,10 @@ class AnalysisSchemaTest(unittest.TestCase):
         self.assertNotIn("$ref", json.dumps(schema))
         self.assertEqual(set(schema["required"]), set(schema["properties"]))
         self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(schema["properties"]["match_score"], {"type": "integer"})
+        self.assertNotIn("match_score", schema["properties"])
+        self.assertEqual(schema["properties"]["match_checks"]["type"], "array")
+        self.assertNotIn("tier", schema["properties"]["match_analysis"]["properties"])
+        self.assertNotIn("grounding_issues", schema["properties"])
         point = schema["properties"]["match_analysis"]["properties"]["strengths"]["items"]
         self.assertEqual(point["required"], ["title", "detail"])
         self.assertFalse(point["additionalProperties"])
@@ -73,3 +77,13 @@ class SchemaFallbackTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def setUpModule():
+    global _transport_fixture
+    _transport_fixture = inline_transport()
+    _transport_fixture.start()
+
+
+def tearDownModule():
+    _transport_fixture.stop()

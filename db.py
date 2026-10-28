@@ -49,6 +49,9 @@ async_tasks (
     user_id INTEGER                        -- owning user (NULL = legacy)
 )
 
+model_calls / user_model_quotas: the durable model usage ledger and per-User
+daily quota overrides; see `ensure_model_usage_schema` and `model_usage.py`.
+
 The `data` column is the authoritative record; the other columns are indexed
 copies used for fast WHERE / ORDER BY queries.  When a row is updated (e.g.
 applied flag, application_date) both the indexed column and the JSON blob are
@@ -73,7 +76,7 @@ logger = logging.getLogger(__name__)
 # Columns that have their own DB column (and must be kept in sync with `data`)
 INDEXED_COLS = {
     "id", "job_url", "title", "company", "date_scraped", "source",
-    "requires_german", "german_level", "match_score", "applied", "status", "is_one_off",
+    "requires_german", "german_level", "match_score", "match_rating", "match_checks", "applied", "status", "is_one_off",
     "application_date", "application_method", "response_status", "company_contact",
     "processed", "cv_profile_override", "user_id",
 }
@@ -118,11 +121,15 @@ def _ensure_default_user(conn: sqlite3.Connection) -> int:
     row = conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()
     if row:
         return row["id"]
+    username = DEFAULT_USER_USERNAME
+    while conn.execute('SELECT 1 FROM retired_usernames WHERE username = ?', (username,)).fetchone():
+        import secrets
+        username = DEFAULT_USER_USERNAME + '-' + secrets.token_hex(8)
     conn.execute(
         "INSERT INTO users (username, display_name, password_hash, created_at) VALUES (?, ?, NULL, ?)",
-        (DEFAULT_USER_USERNAME, DEFAULT_USER_USERNAME.capitalize(), datetime.now().isoformat()),
+        (username, username.capitalize(), datetime.now().isoformat()),
     )
-    logger.info("Created default user '%s' (set a password via manage_users.py)", DEFAULT_USER_USERNAME)
+    logger.info("Created default user '%s' (set a password via manage_users.py)", username)
     return conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()["id"]
 
 
@@ -188,6 +195,8 @@ def _create_jobs_table(conn: sqlite3.Connection) -> None:
             requires_german    INTEGER DEFAULT 0,
             german_level       TEXT DEFAULT 'unknown',
             match_score        INTEGER,
+            match_rating       TEXT,
+            match_checks       TEXT,
             applied            INTEGER DEFAULT 0,
             status             TEXT DEFAULT 'new',
             is_one_off         INTEGER DEFAULT 0,
@@ -204,6 +213,58 @@ def _create_jobs_table(conn: sqlite3.Connection) -> None:
     """)
 
 
+MODEL_USAGE_SCHEMA = (
+    # One row per attempted model POST. Reservation columns are NOT NULL; every
+    # response-derived column stays NULL unless the response stated it. Never
+    # store prompts, responses, error bodies, headers, full URLs or keys here.
+    """CREATE TABLE IF NOT EXISTS model_calls (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        origin                  TEXT NOT NULL,
+        operation_id            TEXT NOT NULL,
+        task_id                 TEXT,
+        purpose                 TEXT NOT NULL,
+        label                   TEXT NOT NULL,
+        route                   TEXT NOT NULL,
+        endpoint_host           TEXT NOT NULL,
+        requested_model         TEXT NOT NULL,
+        day                     TEXT NOT NULL,
+        reserved_at             TEXT NOT NULL,
+        prompt_bytes            INTEGER NOT NULL,
+        payload_bytes           INTEGER NOT NULL,
+        requested_output_tokens INTEGER NOT NULL,
+        outcome                 TEXT NOT NULL DEFAULT 'reserved',
+        finished_at             TEXT,
+        http_status             INTEGER,
+        response_bytes          INTEGER,
+        provider_request_id     TEXT,
+        served_model            TEXT,
+        finish_reason           TEXT,
+        prompt_tokens           INTEGER,
+        completion_tokens       INTEGER,
+        total_tokens            INTEGER,
+        cached_tokens           INTEGER,
+        reasoning_tokens        INTEGER,
+        reported_cost           TEXT,
+        cost_unit               TEXT,
+        is_byok                 INTEGER
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_model_calls_user_day ON model_calls(user_id, day)",
+    """CREATE TABLE IF NOT EXISTS user_model_quotas (
+        user_id             INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        daily_attempts      INTEGER,
+        daily_output_tokens INTEGER,
+        updated_at          TEXT NOT NULL
+    )""",
+)
+
+
+def ensure_model_usage_schema(conn: sqlite3.Connection) -> None:
+    """Additive and idempotent; cron and CLI runs may never call init_db."""
+    for statement in MODEL_USAGE_SCHEMA:
+        conn.execute(statement)
+
+
 def init_db() -> None:
     """Create tables (if needed), migrate to the multi-user schema, then
     auto-import legacy JSON files on first run."""
@@ -218,6 +279,16 @@ def init_db() -> None:
             created_at       TEXT
         )
     """)
+    conn.execute('''CREATE TABLE IF NOT EXISTS user_sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at INTEGER NOT NULL
+    )''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)')
+    conn.execute('CREATE TABLE IF NOT EXISTS retired_usernames (username TEXT PRIMARY KEY)')
+    conn.execute('''CREATE TABLE IF NOT EXISTS login_attempts (
+        bucket TEXT PRIMARY KEY, started_at INTEGER NOT NULL, attempts INTEGER NOT NULL
+    )''')
     default_user_id = _ensure_default_user(conn)
 
     if _jobs_needs_user_migration(conn):
@@ -280,15 +351,26 @@ def init_db() -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    for column in ("stage TEXT", "request_key TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE async_tasks ADD COLUMN {column}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_async_tasks_kind_status ON async_tasks(kind, status, created_at)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user         ON jobs(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_date_scraped      ON jobs(user_id, date_scraped)")
+    for column in ("match_rating TEXT", "match_checks TEXT"):
+        if column.split()[0] not in {r[1] for r in conn.execute('PRAGMA table_info(jobs)')}:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {column}")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_match_rating ON jobs(user_id, match_rating)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_match_score       ON jobs(user_id, match_score)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_status            ON jobs(user_id, status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_requires_german   ON jobs(user_id, requires_german)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_german_level      ON jobs(user_id, german_level)")
+    ensure_model_usage_schema(conn)
     conn.commit()
     _migrate_from_json(conn, default_user_id)
     conn.close()
@@ -362,6 +444,8 @@ def _make_row(job: dict, is_one_off: bool = False, user_id: Optional[int] = None
         "requires_german":    int(requires_german(job_copy.get("german_level", job_copy.get("requires_german")))),
         "german_level":       normalize_german_level(job_copy.get("german_level", job_copy.get("requires_german"))),
         "match_score":        job_copy.get("match_score"),
+        "match_rating":       job_copy.get("match_rating"),
+        "match_checks":       json.dumps(job_copy.get("match_checks") or [], ensure_ascii=False),
         "applied":            _to_bool_int(job_copy.get("status") == "applied" or job_copy.get("applied", False)),
         "status":             job_copy.get("status", "new"),
         "is_one_off":         int(is_one_off),
@@ -388,6 +472,8 @@ def _merge_row(row: sqlite3.Row) -> dict:
             continue
         if col in ("requires_german", "applied", "is_one_off"):
             d[col] = bool(val) if val is not None else False
+        elif col == "match_checks":
+            d[col] = json.loads(val) if val else d.get(col, [])
         elif col == "processed":
             d[col] = int(val) if val is not None else 1
         else:
@@ -426,19 +512,19 @@ def _upsert_job_conn(conn: sqlite3.Connection, job: dict, is_one_off: bool = Fal
     conn.execute("""
         INSERT INTO jobs
             (user_id, id, job_url, title, company, date_scraped, source,
-             requires_german, german_level, match_score, applied, status, is_one_off,
+             requires_german, german_level, match_score, match_rating, match_checks, applied, status, is_one_off,
              application_date, application_method, response_status,
              company_contact, processed, data)
         VALUES
             (:user_id, :id, :job_url, :title, :company, :date_scraped, :source,
-             :requires_german, :german_level, :match_score, :applied, :status, :is_one_off,
+             :requires_german, :german_level, :match_score, :match_rating, :match_checks, :applied, :status, :is_one_off,
              :application_date, :application_method, :response_status,
              :company_contact, :processed, :data)
         ON CONFLICT(user_id, id) DO UPDATE SET
             job_url=excluded.job_url, title=excluded.title, company=excluded.company,
             date_scraped=excluded.date_scraped, source=excluded.source,
             requires_german=excluded.requires_german, german_level=excluded.german_level,
-            match_score=excluded.match_score, applied=excluded.applied, status=excluded.status,
+            match_score=excluded.match_score, match_rating=excluded.match_rating, match_checks=excluded.match_checks, applied=excluded.applied, status=excluded.status,
             application_date=excluded.application_date, application_method=excluded.application_method,
             response_status=excluded.response_status, company_contact=excluded.company_contact,
             processed=excluded.processed, data=excluded.data
@@ -471,11 +557,15 @@ def _row_to_user(row: sqlite3.Row) -> dict:
 
 def create_user(username: str, password_hash: Optional[str] = None,
                 display_name: Optional[str] = None, telegram_chat_id: Optional[str] = None) -> dict:
-    username = username.strip().lower()
-    if not username:
-        raise ValueError("username must not be empty")
+    from user_assets import normalize_username, user_profile_dir
+    username = normalize_username(username)
     conn = get_conn()
     try:
+        conn.execute('BEGIN IMMEDIATE')
+        if conn.execute('SELECT 1 FROM retired_usernames WHERE username = ?', (username,)).fetchone():
+            raise ValueError('This username was retired to protect retained profile files. Choose another username.')
+        if os.path.lexists(user_profile_dir(username)):
+            raise ValueError('Profile files already exist for this username. Choose another username; existing files were preserved.')
         conn.execute(
             "INSERT INTO users (username, display_name, password_hash, telegram_chat_id, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -483,10 +573,11 @@ def create_user(username: str, password_hash: Optional[str] = None,
         )
         conn.commit()
     except sqlite3.IntegrityError as e:
-        conn.close()
         raise ValueError(f"username '{username}' already exists") from e
-    user = get_user_by_username(username, conn=conn)
-    conn.close()
+    else:
+        user = get_user_by_username(username, conn=conn)
+    finally:
+        conn.close()
     return user
 
 
@@ -538,17 +629,93 @@ def update_user_fields(user_id: int, **fields) -> bool:
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     conn = get_conn()
     cur = conn.execute(f"UPDATE users SET {set_clause} WHERE id = ?", (*updates.values(), user_id))
+    if 'password_hash' in updates:
+        conn.execute('DELETE FROM user_sessions WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
     return cur.rowcount > 0
 
 
-def delete_user(user_id: int) -> bool:
-    """Remove a user and all of their data (jobs, tasks, logs). Cannot be undone."""
+def create_session(user_id: int, token_hash: str, expires_at: int, now: int, credential_hash=None) -> bool:
     conn = get_conn()
+    try:
+        with conn:
+            conn.execute('DELETE FROM user_sessions WHERE expires_at <= ?', (now,))
+            if credential_hash is None:
+                conn.execute('INSERT INTO user_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)',
+                             (token_hash, user_id, expires_at))
+                return True
+            result = conn.execute('''INSERT INTO user_sessions (token_hash, user_id, expires_at)
+                SELECT ?, id, ? FROM users WHERE id = ? AND password_hash = ?''',
+                (token_hash, expires_at, user_id, credential_hash))
+            return result.rowcount == 1
+    finally:
+        conn.close()
+
+
+def session_user(token_hash: str, now: int) -> Optional[int]:
+    conn = get_conn()
+    try:
+        row = conn.execute('SELECT user_id FROM user_sessions WHERE token_hash = ? AND expires_at > ?',
+                           (token_hash, now)).fetchone()
+        return row['user_id'] if row else None
+    finally:
+        conn.close()
+
+
+def revoke_session(token_hash: str) -> None:
+    conn = get_conn()
+    try:
+        with conn:
+            conn.execute('DELETE FROM user_sessions WHERE token_hash = ?', (token_hash,))
+    finally:
+        conn.close()
+
+
+def upgrade_password_hash(user_id: int, previous: str, replacement: str) -> bool:
+    conn = get_conn()
+    try:
+        with conn:
+            result = conn.execute('UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ?',
+                                  (replacement, user_id, previous))
+            if result.rowcount:
+                conn.execute('DELETE FROM user_sessions WHERE user_id = ?', (user_id,))
+            return result.rowcount == 1
+    finally:
+        conn.close()
+
+
+def reserve_login_attempt(buckets: dict[str, int], now: int, window=60) -> int:
+    """Atomically reserve hash work. Return retry seconds when any bucket is full."""
+    conn = get_conn()
+    try:
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            conn.execute('DELETE FROM login_attempts WHERE started_at <= ?', (now - window,))
+            for bucket, maximum in buckets.items():
+                row = conn.execute('SELECT * FROM login_attempts WHERE bucket = ?', (bucket,)).fetchone()
+                if row and row['attempts'] >= maximum:
+                    return max(1, row['started_at'] + window - now)
+            for bucket in buckets:
+                conn.execute('''INSERT INTO login_attempts (bucket, started_at, attempts) VALUES (?, ?, 1)
+                    ON CONFLICT(bucket) DO UPDATE SET attempts = attempts + 1''', (bucket, now))
+            return 0
+    finally:
+        conn.close()
+
+
+def delete_user(user_id: int) -> bool:
+    """Remove database records; retain profile files and reserve their former owner's name."""
+    conn = get_conn()
+    ensure_model_usage_schema(conn)
+    conn.commit()
+    conn.execute('BEGIN IMMEDIATE')
+    conn.execute('INSERT OR IGNORE INTO retired_usernames (username) SELECT username FROM users WHERE id = ?', (user_id,))
     conn.execute("DELETE FROM jobs WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM async_tasks WHERE user_id = ?", (user_id,))
     conn.execute("DELETE FROM scraping_logs WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM model_calls WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM user_model_quotas WHERE user_id = ?", (user_id,))
     cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
@@ -591,7 +758,7 @@ def load_unprocessed_jobs(user_id: int) -> list:
     """Return a user's jobs pending AI analysis or with previously failed analysis."""
     conn = get_conn()
     rows = conn.execute(
-        "SELECT * FROM jobs WHERE user_id=? AND (processed=0 OR (processed=1 AND match_score IS NULL)) AND is_one_off=0 AND "
+        "SELECT * FROM jobs WHERE user_id=? AND (processed=0 OR (processed=1 AND match_score IS NULL AND match_rating IS NULL AND coalesce(json_extract(data, '$.analysis_state'), '') != 'complete')) AND is_one_off=0 AND "
         "coalesce(json_extract(data, '$.analysis_state'), '') != 'skipped' ORDER BY date_scraped DESC",
         (user_id,)
     ).fetchall()
@@ -599,11 +766,19 @@ def load_unprocessed_jobs(user_id: int) -> list:
     return [_merge_row(r) for r in rows]
 
 
+def get_job_count(user_id: int) -> int:
+    conn = get_conn()
+    try:
+        return conn.execute('SELECT COUNT(*) FROM jobs WHERE user_id = ?', (user_id,)).fetchone()[0]
+    finally:
+        conn.close()
+
+
 def get_unprocessed_count(user_id: int) -> int:
     """Return the count of a user's unprocessed jobs."""
     conn = get_conn()
     count = conn.execute(
-        "SELECT COUNT(*) FROM jobs WHERE user_id=? AND (processed=0 OR (processed=1 AND match_score IS NULL)) AND is_one_off=0 AND "
+        "SELECT COUNT(*) FROM jobs WHERE user_id=? AND (processed=0 OR (processed=1 AND match_score IS NULL AND match_rating IS NULL AND coalesce(json_extract(data, '$.analysis_state'), '') != 'complete')) AND is_one_off=0 AND "
         "coalesce(json_extract(data, '$.analysis_state'), '') != 'skipped'",
         (user_id,)
     ).fetchone()[0]
@@ -719,6 +894,8 @@ def update_job_fields(job_id: str, user_id: int, **fields) -> bool:
         if k in INDEXED_COLS:
             if k in ("requires_german", "applied"):
                 set_parts[k] = _to_bool_int(v)
+            elif k == "match_checks":
+                set_parts[k] = json.dumps(v or [], ensure_ascii=False)
             elif k == "german_level":
                 set_parts[k] = normalize_german_level(v)
                 set_parts["requires_german"] = int(requires_german(v))
@@ -833,17 +1010,70 @@ def async_task_create(
     conn.close()
 
 
+class TaskCapacityError(Exception):
+    """No background operation slot is available."""
+
+
+def async_task_admit(task_id: str, kind: str, user_id: int, request_key: str,
+                     payload: dict, total: Optional[int], *, max_total: int,
+                     max_user: int) -> tuple[str, bool]:
+    """Atomically reuse equivalent active work or reserve a persistent queue slot.
+
+    The backend owner also serializes scheduler state around this transaction.
+    This helper does not grant CLI/cron or multiple backend worker support.
+    """
+    conn = get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("""SELECT id FROM async_tasks WHERE user_id = ? AND kind = ?
+            AND request_key = ? AND status IN ('queued', 'running')
+            ORDER BY created_at LIMIT 1""", (user_id, kind, request_key)).fetchone()
+        if row:
+            conn.commit()
+            return row['id'], True
+        counts = conn.execute("""SELECT COUNT(*) AS total,
+            COALESCE(SUM(user_id = ?), 0) AS own FROM async_tasks
+            WHERE status IN ('queued', 'running')""", (user_id,)).fetchone()
+        if counts['total'] >= max_total or counts['own'] >= max_user:
+            raise TaskCapacityError("Background queue is full for this account or server. Try again later.")
+        now = time.time()
+        conn.execute("""INSERT INTO async_tasks
+            (id, kind, status, stage, request_key, created_at, updated_at, payload,
+             logs, total, processed, failed, cancelled, user_id)
+            VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, '[]', ?, 0, 0, 0, ?)""",
+            (task_id, kind, request_key, now, now, json.dumps(payload, ensure_ascii=False), total, user_id))
+        conn.commit()
+        return task_id, False
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def async_task_get(task_id: str, user_id: int) -> Optional[dict]:
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT * FROM async_tasks WHERE id = ? AND user_id = ?",
+                           (task_id, user_id)).fetchone()
+        return _async_task_row_to_scrape_status(row) if row else None
+    finally:
+        conn.close()
+
+
 def async_task_update(task_id: str, **fields: Any) -> None:
     """Update task columns. Pass result/logs/payload as dict/list — JSON-encoded."""
     if not fields:
         return
     allowed = {
         "status", "result", "logs", "total", "processed", "failed",
-        "cancelled", "payload",
+        "cancelled", "payload", "stage",
     }
     bad = set(fields) - allowed
     if bad:
         raise ValueError(f"Unsupported async_task fields: {bad}")
+    if 'status' in fields and 'stage' not in fields:
+        fields['stage'] = fields['status']
     sets = ["updated_at = ?"]
     vals: list = [time.time()]
     for k, v in fields.items():
@@ -882,6 +1112,7 @@ def async_task_append_log(task_id: str, entry: dict) -> None:
 def _async_task_row_to_scrape_status(row: sqlite3.Row) -> dict:
     return {
         "status": row["status"],
+        "stage": row["stage"] or row["status"],
         "logs": json.loads(row["logs"] or "[]"),
         "result": json.loads(row["result"]) if row["result"] else None,
         "created_at": row["created_at"],
@@ -893,13 +1124,7 @@ def _async_task_row_to_scrape_status(row: sqlite3.Row) -> dict:
 
 
 def _async_task_row_to_reprocess_status(row: sqlite3.Row) -> dict:
-    return {
-        "status": row["status"],
-        "total": row["total"],
-        "processed": row["processed"] or 0,
-        "failed": row["failed"] or 0,
-        "cancelled": bool(row["cancelled"]),
-    }
+    return _async_task_row_to_scrape_status(row)
 
 
 def async_task_get_scrape(task_id: str, user_id: int) -> Optional[dict]:
@@ -921,13 +1146,7 @@ def async_task_get_reprocess(task_id: str, user_id: int) -> Optional[dict]:
 
 
 def _async_task_row_to_batch_generate_status(row: sqlite3.Row) -> dict:
-    return {
-        "status": row["status"],
-        "total": row["total"],
-        "processed": row["processed"] or 0,
-        "failed": row["failed"] or 0,
-        "cancelled": bool(row["cancelled"]),
-    }
+    return _async_task_row_to_scrape_status(row)
 
 
 def async_task_get_batch_generate(task_id: str, user_id: int) -> Optional[dict]:
@@ -957,7 +1176,7 @@ def async_task_get_latest_running_reprocess(user_id: int) -> Optional[tuple[str,
     row = conn.execute(
         """
         SELECT * FROM async_tasks
-        WHERE kind = 'reprocess' AND status = 'running' AND user_id = ?
+        WHERE kind = 'reprocess' AND status IN ('queued', 'running') AND user_id = ?
         ORDER BY created_at DESC LIMIT 1
         """,
         (user_id,),
@@ -973,7 +1192,7 @@ def async_task_get_latest_running_scrape(user_id: int) -> Optional[tuple[str, di
     row = conn.execute(
         """
         SELECT * FROM async_tasks
-        WHERE kind = 'scrape' AND status = 'running' AND user_id = ?
+        WHERE kind = 'scrape' AND status IN ('queued', 'running') AND user_id = ?
         ORDER BY created_at DESC LIMIT 1
         """,
         (user_id,),
@@ -989,7 +1208,7 @@ def async_task_get_latest_running_batch_generate(user_id: int) -> Optional[tuple
     row = conn.execute(
         """
         SELECT * FROM async_tasks
-        WHERE kind = 'batch_generate' AND status = 'running' AND user_id = ?
+        WHERE kind = 'batch_generate' AND status IN ('queued', 'running') AND user_id = ?
         ORDER BY created_at DESC LIMIT 1
         """,
         (user_id,),
@@ -1020,7 +1239,7 @@ def async_task_prune_completed(older_than_sec: float = 3600) -> int:
     cur = conn.execute(
         """
         DELETE FROM async_tasks
-        WHERE created_at < ? AND status IN ('completed', 'failed', 'cancelled')
+        WHERE updated_at < ? AND status IN ('completed', 'failed', 'cancelled', 'interrupted')
         """,
         (cutoff,),
     )
@@ -1031,16 +1250,16 @@ def async_task_prune_completed(older_than_sec: float = 3600) -> int:
 
 
 def async_task_recover_interrupted() -> None:
-    """Mark tasks that were still 'running' as failed (e.g. after server restart)."""
+    """Owner-only startup: interrupt unfinished work; never silently rerun it."""
     msg = json.dumps(
-        {"success": False, "message": "Task interrupted (server restarted)"},
+        {"success": False, "message": "Task interrupted by server shutdown/restart. Retry explicitly; saved work may already exist."},
         ensure_ascii=False,
     )
     conn = get_conn()
     conn.execute(
         """
-        UPDATE async_tasks SET status = 'failed', result = ?, updated_at = ?
-        WHERE status = 'running'
+        UPDATE async_tasks SET status = 'interrupted', stage = 'interrupted', result = ?, updated_at = ?
+        WHERE status IN ('queued', 'running')
         """,
         (msg, time.time()),
     )

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function DemoDocuments({ job }) {
+  const api = useApi();
   const [documents, setDocuments] = useState(null);
   const [kind, setKind] = useState('cl');
   const [error, setError] = useState('');
@@ -11,7 +12,7 @@ export function DemoDocuments({ job }) {
       .then(res => { if (active) setDocuments(res.data); })
       .catch(() => { if (active) setError('Could not load demo documents.'); });
     return () => { active = false; };
-  }, [job.id]);
+  }, [api, job.id]);
   if (error) return <p role="alert">{error}</p>;
   if (!documents) return <p>Loading demo documents…</p>;
   if (!documents.has_cv) return <div className="card">This fictional posting has no prepared documents. Open the Cumulus Research, Brookline Data or Rainfall Commons posting.</div>;

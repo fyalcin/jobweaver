@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import threading
 import uuid
+from compiler_sandbox import run_tool
+from operation_budget import check, current
 from contextlib import contextmanager
 
 MAX_PDF_BYTES = 12 * 1024 * 1024
@@ -21,8 +23,20 @@ _guard = threading.Lock()
 def document_lock(path):
     with _guard:
         lock = _locks.setdefault(os.path.abspath(path), threading.RLock())
-    with lock:
+    shared = current()
+    if shared is None:
+        with lock:
+            yield
+        return
+    while True:
+        shared.check()
+        if lock.acquire(timeout=min(.05, shared.remaining())):
+            break
+    try:
+        shared.check()
         yield
+    finally:
+        lock.release()
 
 
 def digest(value):
@@ -31,6 +45,8 @@ def digest(value):
 
 def atomic_write(path, value):
     target = Path(path)
+    if target.name == 'publication.json':
+        check()
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = value.encode('utf-8') if isinstance(value, str) else value
     fd, temp = tempfile.mkstemp(prefix='.write-', dir=target.parent)
@@ -39,27 +55,36 @@ def atomic_write(path, value):
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
+        if target.name == 'publication.json':
+            check()
         os.replace(temp, target)
     finally:
         if os.path.exists(temp):
             os.unlink(temp)
 
 
-def validate_pdf(path):
+def inspect_pdf(path):
+    """Validate a bounded PDF in isolation and return its hash and page count."""
     path = Path(path)
     if not path.is_file() or not 0 < path.stat().st_size <= MAX_PDF_BYTES:
         raise ValueError('PDF is missing, empty or larger than 12 MiB')
     data = path.read_bytes()
     if not data.startswith(b'%PDF-'):
         raise ValueError('Uploaded/built file is not a PDF')
-    result = subprocess.run(['pdfinfo', str(path)], capture_output=True, timeout=10)
+    with tempfile.TemporaryDirectory(prefix='pdf-inspect-') as temp:
+        Path(temp, 'document.pdf').write_bytes(data)
+        result = run_tool(['pdfinfo', 'document.pdf'], temp, timeout=10)
     info = result.stdout.decode('utf-8', errors='replace')
     pages = re.search(r'^Pages:\s+(\d+)', info, re.M)
     if result.returncode != 0 or not pages or not 0 < int(pages.group(1)) <= 30:
         raise ValueError('PDF cannot be parsed or exceeds 30 pages')
     if re.search(r'^Encrypted:\s+yes', info, re.M):
         raise ValueError('Encrypted PDFs are not supported')
-    return digest(data)
+    return {'hash': digest(data), 'pages': int(pages.group(1))}
+
+
+def validate_pdf(path):
+    return inspect_pdf(path)['hash']
 
 
 def decode_pdf(encoded):

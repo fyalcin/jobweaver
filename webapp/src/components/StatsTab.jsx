@@ -23,14 +23,26 @@ import {
   Download
 } from 'lucide-react'
 import { STATUS_CONFIG } from '../constants/status'
+import { sourceLabel } from '../constants/ratings'
+import { formatDateDisplay } from '../constants/dates'
 
 const SKILLS_PAGE_SIZE = 20
 
-function CustomTooltip({ active, payload, label }) {
+// Category colors stay attached to their source when the chart order changes.
+function sourceColor(source) {
+  const name = String(source).toLowerCase()
+  const category = name.includes('linkedin') ? 'linkedin' : name.includes('karriere') ? 'karriere'
+    : name.includes('manual') ? 'manual' : /company|greenhouse|personio|smartrecruiters|successfactors/.test(name) ? 'company' : 'other'
+  return `var(--chart-source-${category})`
+}
+
+function CustomTooltip({ active, payload, label, labelFormatter }) {
   if (active && payload && payload.length) {
+    const rawLabel = label ?? payload[0]?.name
+    const displayLabel = labelFormatter ? labelFormatter(rawLabel) : rawLabel
     return (
       <div style={{ background: 'var(--surface-color)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem' }}>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '2px' }}>{label}</p>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '2px' }}>{displayLabel}</p>
         <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{payload[0].value}</p>
       </div>
     )
@@ -84,7 +96,6 @@ function exportSkillsStats(skillsStats) {
 }
 
 export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsLoading, skillsError, fetchSkillsStats }) {
-  const CHART_COLORS = ['#6366f1', '#f59e0b', '#3b82f6', '#8b5cf6', '#10b981', '#ef4444']
   const [skillsVisible, setSkillsVisible] = useState(SKILLS_PAGE_SIZE)
 
   if (statsLoading) {
@@ -124,9 +135,9 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
           <span className="metric-value">{stats.total_jobs}</span>
         </div>
         <div className="metric-card stats-hero-card">
-          <span className="metric-label">Avg Match Score</span>
+          <span className="metric-label">Rated jobs</span>
           <span className="metric-value" style={{ color: 'var(--primary-color)' }}>
-            {stats.avg_match_score != null ? `${stats.avg_match_score}` : '—'}
+            {stats.rated_jobs ?? '—'}
           </span>
         </div>
       </div>
@@ -145,7 +156,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
 
       {/* Compute data presence for charts */}
       {(() => {
-        const hasMatchScores = stats.match_score_distribution && stats.match_score_distribution.some(d => (d.count || 0) > 0)
+        const hasMatchRatings = stats.match_rating_distribution && stats.match_rating_distribution.some(d => (d.count || 0) > 0)
         const totalSourceCount = stats.source_breakdown?.reduce((acc, s) => acc + (s.count || 0), 0) || 0
         const totalFunnelCount = stats.status_funnel?.reduce((acc, f) => acc + (f.count || 0), 0) || 0
         const hasJobsPerDay = stats.jobs_per_day && stats.jobs_per_day.length > 0 && stats.jobs_per_day.some(d => (d.count || 0) > 0)
@@ -153,28 +164,28 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: '1.5rem' }}>
 
-            {/* Match Score Distribution */}
+            {/* Match ratings */}
             <div className="card" style={{ minWidth: 0 }}>
-              <h3 className="card-title"><BarChart2 size={18} /> Match Score Distribution</h3>
-              {hasMatchScores ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={stats.match_score_distribution} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+              <h3 className="card-title"><BarChart2 size={18} /> Match ratings</h3>
+              {hasMatchRatings ? (
+                <><ul className="rating-distribution-list">{stats.match_rating_distribution.map(item => <li key={item.rating}>{item.rating}: {item.count}</li>)}</ul><ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={stats.match_rating_distribution} margin={{ top: 5, right: 8, bottom: 5, left: -22 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                    <XAxis dataKey="range" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                    <XAxis dataKey="rating" interval={0} tick={{ fill: 'var(--text-secondary)', fontSize: 10.5 }} />
+                    <YAxis allowDecimals={false} width={36} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                      {stats.match_score_distribution.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      {stats.match_rating_distribution.map((_, i) => (
+                        <Cell key={i} fill={`color-mix(in srgb, var(--primary-color) ${40 + (i / Math.max(1, stats.match_rating_distribution.length - 1)) * 60}%, var(--surface-card))`} />
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer></>
               ) : (
                 <ChartEmptyState
                   icon={BarChart2}
-                  title="No Match Score Data"
-                  message="Match scores will appear once incoming job listings are scored by AI."
+                  title="No evidence-based ratings yet"
+                  message="Rate incoming or historical postings to compare requirement evidence. Historical scores are not converted to ratings."
                 />
               )}
             </div>
@@ -198,21 +209,22 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                           paddingAngle={2}
                           isAnimationActive={false}
                         >
-                          {stats.source_breakdown.filter(s => s.count > 0).map((_, i) => (
-                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                          {stats.source_breakdown.filter(s => s.count > 0).map((item, i) => (
+                            <Cell key={i} fill={sourceColor(item.source)} />
                           ))}
                         </Pie>
-                        <Tooltip content={<CustomTooltip />} />
+                        <Tooltip content={<CustomTooltip labelFormatter={sourceLabel} />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                   <div className="source-legend-row">
-                    {stats.source_breakdown.filter(s => s.count > 0).map((item, i) => {
+                    {stats.source_breakdown.filter(s => s.count > 0).map((item) => {
                       const pct = totalSourceCount > 0 ? ((item.count / totalSourceCount) * 100).toFixed(0) : 0
+                      const displaySource = sourceLabel(item.source)
                       return (
-                        <div key={item.source} className="source-legend-item" title={`${item.source}: ${item.count} jobs`}>
-                          <span className="source-legend-dot" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                          <span className="source-legend-name">{item.source}</span>
+                        <div key={item.source} className="source-legend-item" title={`${displaySource}: ${item.count} jobs`}>
+                          <span className="source-legend-dot" style={{ background: sourceColor(item.source) }} />
+                          <span className="source-legend-name">{displaySource}</span>
                           <span className="source-legend-pct">{pct}%</span>
                         </div>
                       )
@@ -239,7 +251,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                     margin={{ top: 5, right: 20, bottom: 5, left: 60 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
                     <YAxis
                       type="category"
                       dataKey="status"
@@ -247,10 +259,10 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                       tickFormatter={s => STATUS_CONFIG[s]?.label || s}
                       width={55}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip labelFormatter={s => STATUS_CONFIG[s]?.label || s} />} />
                     <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false}>
                       {stats.status_funnel.map(({ status }) => (
-                        <Cell key={status} fill={STATUS_CONFIG[status]?.color || '#6366f1'} />
+                        <Cell key={status} fill={STATUS_CONFIG[status]?.color || 'var(--text-muted)'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -276,12 +288,13 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                     <XAxis
                       dataKey="date"
+                      tickFormatter={v => formatDateDisplay(v)}
                       tick={{ fill: 'var(--text-secondary)', fontSize: 10, angle: -45, textAnchor: 'end' }}
                       interval="preserveStartEnd"
                     />
-                    <YAxis tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                    <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
+                    <Tooltip content={<CustomTooltip labelFormatter={v => formatDateDisplay(v)} />} />
+                    <Bar dataKey="count" fill="var(--primary-color)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -384,8 +397,8 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
         {!skillsLoading && !skillsStats && !skillsError && (
           <ChartEmptyState
             icon={TrendingUp}
-            title="AI Skill Demand Analytics"
-            message="Click 'Refresh' above to compute real-time skill frequency and AI-normalized synonyms across all ingested postings."
+            title="Skill frequency across postings"
+            message="Click 'Refresh' above to count recurring skills and group synonyms across your saved postings."
           />
         )}
 
@@ -409,11 +422,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                 />
                 <Tooltip content={<SkillsTooltip />} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false}>
-                  {skillsSlice.map((_, i) => {
-                    // Gradient effect: top skills brighter
-                    const alpha = Math.max(0.45, 1 - (i / skillsSlice.length) * 0.55)
-                    return <Cell key={i} fill={`rgba(99,102,241,${alpha})`} />
-                  })}
+                  {skillsSlice.map((_, i) => <Cell key={i} fill="var(--primary-color)" />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

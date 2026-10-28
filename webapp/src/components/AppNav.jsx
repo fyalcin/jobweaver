@@ -42,9 +42,9 @@ export function AppNav({
       {/* Brand Header at top of sidebar */}
       <div className="nav-brand">
         <div className="brand-logo-badge">
-          <Briefcase size={16} color="#ffffff" />
+          <Briefcase size={16} aria-hidden="true" />
         </div>
-        <span className="nav-brand-title">Jobweaver</span>
+        <span className="nav-brand-title">Job<span>weaver</span></span>
       </div>
 
       <div className="nav-tabs-list">
@@ -53,6 +53,7 @@ export function AppNav({
             {tab.utility && <div className="nav-divider" />}
             <button
               className={`nav-tab ${tab.mobilePrimary ? '' : 'mobile-nav-secondary'} ${activeTab === tab.id ? 'active' : ''}`}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               onClick={() => selectTab(tab.id)}
             >
               {tab.icon}

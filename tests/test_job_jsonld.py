@@ -2,7 +2,8 @@
 import json
 import socket
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import time
 
 import job_jsonld
 import safe_fetch
@@ -118,30 +119,32 @@ class SafeFetchTest(unittest.TestCase):
             safe_fetch.check_url("https://jobs.example.org/1")
 
     def test_redirect_to_a_private_address_is_refused(self):
-        class Response:
-            def __init__(self, status, location=None):
-                self.status_code, self.headers, self.text, self.url = status, {"Location": location} if location else {}, "", ""
-                self.is_redirect = status in (301, 302, 303, 307, 308)
-            def raise_for_status(self):
-                pass
+        response = MagicMock(status=302)
+        response.getheader.return_value = "http://127.0.0.1:8000/api/jobs"
+        connection = MagicMock()
+        connection.getresponse.return_value = response
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 443))]
         with patch("safe_fetch.socket.getaddrinfo", return_value=public), \
-             patch("safe_fetch.requests.get", return_value=Response(302, "http://127.0.0.1:8000/api/jobs")):
+             patch("safe_fetch._connect", return_value=connection) as connect:
             with self.assertRaises(safe_fetch.UnsafeURL):
-                safe_fetch.fetch_page("https://jobs.example.org/1")
+                safe_fetch._fetch_in_helper("https://jobs.example.org/1", time.monotonic() + 5)
+        connect.assert_called_once()
+        response.close.assert_called_once()
+        connection.close.assert_called_once()
 
     def test_identifies_itself_honestly(self):
         seen = {}
-        class Response:
-            status_code, headers, text, url, is_redirect = 200, {}, "<html></html>", "https://jobs.example.org/1", False
-            def raise_for_status(self):
-                pass
-        def get(url, **kwargs):
+        response = MagicMock(status=200)
+        response.getheader.return_value = "text/html"
+        connection = MagicMock()
+        connection.getresponse.return_value = response
+        def get(method, url, **kwargs):
             seen.update(kwargs["headers"])
-            return Response()
+        connection.request.side_effect = get
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 443))]
-        with patch("safe_fetch.socket.getaddrinfo", return_value=public), patch("safe_fetch.requests.get", side_effect=get):
-            safe_fetch.fetch_page("https://jobs.example.org/1")
+        with patch("safe_fetch.socket.getaddrinfo", return_value=public), \
+             patch("safe_fetch._connect", return_value=connection), patch("safe_fetch._read_body", return_value=b"<html></html>"):
+            safe_fetch._fetch_in_helper("https://jobs.example.org/1", time.monotonic() + 5)
         self.assertTrue(seen["User-Agent"].startswith("Jobweaver/"))
         self.assertNotIn("Mozilla", seen["User-Agent"])
 

@@ -15,6 +15,7 @@ class TestSonarResearch(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="gj-sonar-test-")
         self.db_path = os.path.join(self.tmp_dir, "test.db")
+        self.addCleanup(db.set_db_path, db.DB_PATH)  # Later tests resolve slots beside the DB.
         db.set_db_path(self.db_path)
         db.init_db()
 

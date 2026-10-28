@@ -10,6 +10,7 @@ against the facts it cites. Layout is fixed. CVs keep every approved bullet unle
 compact mode is chosen.
 Existing custom sources remain available through manual Advanced editing.
 """
+from operation_budget import operation, check
 import json
 import base64
 import unicodedata
@@ -89,7 +90,8 @@ def evidence(user, cv):
     # Plaintext is kept verbatim. Standing notes/preferences never become facts.
     cv = (cv or '').split('\n\nRecent Experience & Standing Notes:')[0].strip()
     if not cv:
-        raise ValueError('No applicant CV is available')
+        from user_assets import NO_CV_MESSAGE
+        raise ValueError(NO_CV_MESSAGE)
     facts = {}
     for line in cv.splitlines():
         if line.strip():
@@ -131,6 +133,7 @@ def document_language(user, job, requested=None, has_record=False):
     return choice
 
 
+@operation()
 def generate(job, cv, user, engine, kind, profile, model, run_prompt, tone="", compact=False, notes=None, language=None):
     if engine not in ('latex', 'typst'):
         raise ValueError('Document engine must be latex or typst')
@@ -404,11 +407,13 @@ def check_plan(plan, facts, job, policy):
     return entries, problems
 
 
+@operation()
 def plan_letter(facts, job, preference, policy, model, run_prompt, notes=None):
     """Ask for a fact plan and check it; up to two retries with the problems listed."""
     prompt = plan_prompt(facts, job, preference, policy)
     problems = []
     for attempt in range(3):
+        check()
         request = prompt if not problems else (prompt + '\n\nYour previous plan was rejected:\n- '
                                                + '\n- '.join(problems) + '\nReturn a corrected JSON plan.')
         try:
@@ -430,6 +435,7 @@ def _sentences(text):
     return [part for part in re.split(r'(?<=[.!?])\s+', text.strip()) if part]
 
 
+@operation()
 def verify_letter(letter, facts, identity, policy, model, run_prompt):
     """A second model checks each sentence against the facts its paragraph cites. Returns problems.
 
@@ -558,11 +564,18 @@ def _settings(user):
     return json.loads(path.read_text()) if path and path.exists() else {}
 
 
-def verifier_model(user):
-    """The letter verifier from the user's settings (`letter_verifier_model`); an empty string switches it off."""
-    return _settings(user).get('letter_verifier_model', DEFAULT_VERIFIER_MODEL)
+def verifier_model(user, writer_model=None):
+    """Explicit verifier choice, or the custom writer's route, or the hosted default."""
+    from generators import resolve_document_model, is_custom_model
+    settings = _settings(user)
+    configured = settings.get('letter_verifier_model')
+    if configured is not None:
+        return configured  # Empty string is the explicit legacy opt-out.
+    writer = writer_model or resolve_document_model(settings)
+    return writer if is_custom_model(writer) else DEFAULT_VERIFIER_MODEL
 
 
+@operation()
 def write_letter(store, job, user, preference, model, run_prompt, current=None, instruction='', notes=None, language=None):
     """Plan the facts (new letters), write the letter, check it, verify it; retry twice with the problems listed.
 
@@ -583,9 +596,10 @@ def write_letter(store, job, user, preference, model, run_prompt, current=None, 
         allowed = identity | {e['fact_id'] for e in plan}
     prompt = letter_prompt(store, facts, job, preference, language, current and current['content'], instruction,
                            plan=plan, policy=policy)
-    checker = verifier_model(user)
+    checker = verifier_model(user, model)
     problems, previous = [], None
     for attempt in range(3):
+        check()
         if not problems:
             request = prompt
         elif previous is None:
@@ -617,6 +631,7 @@ def write_letter(store, job, user, preference, model, run_prompt, current=None, 
             if len(cited & store['personal']) > 1:
                 problems.append('Cite at most one personal-context fact; keep the letter focused on work evidence')
         if not problems and checker:
+            check()
             problems = verify_letter(letter, facts, identity, policy, checker, run_prompt)
         if problems:
             logger.warning('Letter attempt %d rejected: %s', attempt + 1, '; '.join(problems))
@@ -719,6 +734,7 @@ def render_cv(store, ids, engine):
     return ('% ' if engine == 'latex' else '// ') + 'GIMME_APPROVED ' + marker + '\n' + rendered
 
 
+@operation()
 def grounded_edit(source, instruction, user, model, run_prompt):
     from user_assets import load_effective_cv
     match = re.match(r'(?:% |// )GIMME_APPROVED ([A-Za-z0-9+/=]+)\n', source)
@@ -966,11 +982,13 @@ def check_record_plan(answer, store, cap):
     return entries, problems
 
 
+@operation()
 def plan_record_letter(store, job, preference, language, model, run_prompt, cap, notes=None):
     """Plan from the record. Returns (facts the letter may cite, plan, language)."""
     prompt = record_plan_prompt(store, job, preference, cap)
     problems = []
     for attempt in range(3):
+        check()
         request = prompt if not problems else (prompt + '\n\nYour previous plan was rejected:\n- '
                                                + '\n- '.join(problems) + '\nReturn a corrected JSON plan.')
         try:

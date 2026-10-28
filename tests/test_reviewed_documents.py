@@ -20,6 +20,18 @@ class ReviewedDocumentsTest(unittest.TestCase):
         path.mkdir(parents=True)
         (path / 'CV-plaintext.txt').write_text(self.cv)
 
+    def test_custom_writer_uses_the_same_route_for_automatic_verification(self):
+        store = documents.evidence('synthetic', self.cv)
+        model, _ = self._model(self._letter(store))
+        models = []
+        def routed(prompt, **kwargs):
+            models.append(kwargs['model_name'])
+            return model(prompt, **kwargs)
+        documents.generate({'title': 'Dev', 'company': 'C'}, self.cv, 'synthetic', 'typst', 'letter',
+                           'research', 'custom/fictional-local-model', routed)
+        self.assertIn('Letter verification', self.labels)
+        self.assertEqual(set(models), {'custom/fictional-local-model'})
+
     def test_unsupported_claims_are_not_model_output(self):
         store = documents.evidence('synthetic', self.cv)
         with self.assertRaises(ValueError):

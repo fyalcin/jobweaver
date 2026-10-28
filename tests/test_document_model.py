@@ -22,6 +22,15 @@ import server  # noqa: E402
 import generators  # noqa: E402
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class ResolveDocumentModelTest(unittest.TestCase):
     def test_defaults_to_the_cheap_model_when_unset(self):
         self.assertEqual(generators.resolve_document_model({}), "z-ai/glm-5.3-flash")

@@ -16,6 +16,7 @@ class TestTypstSupport(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp(prefix="gj-typst-paths-")
         self.db_path = os.path.join(self.tmp_dir, "test.db")
+        self.addCleanup(db.set_db_path, db.DB_PATH)
         db.set_db_path(self.db_path)
         db.init_db()
         os.makedirs(os.path.join(self.tmp_dir, "base-typst"), exist_ok=True)

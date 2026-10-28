@@ -13,6 +13,15 @@ import server  # noqa: E402
 import user_assets  # noqa: E402
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class UiPreferencesTest(unittest.TestCase):
     """Test user_assets UI preferences functions and server endpoints."""
 
@@ -37,7 +46,7 @@ class UiPreferencesTest(unittest.TestCase):
 
     def test_load_default_preferences(self):
         prefs = user_assets.load_ui_preferences("admin")
-        self.assertEqual(prefs, {"theme": "default", "font": "inter"})
+        self.assertEqual(prefs, {"theme": "loden-light", "font": "fira-sans"})
 
     def test_save_and_load_preferences(self):
         user_assets.save_ui_preferences("admin", {"theme": "kanagawa-wave", "font": "geist"})
@@ -47,14 +56,14 @@ class UiPreferencesTest(unittest.TestCase):
 
         # sam should still be default
         sam_prefs = user_assets.load_ui_preferences("sam")
-        self.assertEqual(sam_prefs.get("theme"), "default")
-        self.assertEqual(sam_prefs.get("font"), "inter")
+        self.assertEqual(sam_prefs.get("theme"), "loden-light")
+        self.assertEqual(sam_prefs.get("font"), "fira-sans")
 
     def test_endpoints_get_and_put(self):
         # Initial GET
         res = server.get_ui_preferences(user=self._user1())
-        self.assertEqual(res.get("theme"), "default")
-        self.assertEqual(res.get("font"), "inter")
+        self.assertEqual(res.get("theme"), "loden-light")
+        self.assertEqual(res.get("font"), "fira-sans")
 
         # PUT valid theme & font
         payload = server.UiPreferencesPayload(theme="rose-pine", font="plus-jakarta-sans")
@@ -75,10 +84,41 @@ class UiPreferencesTest(unittest.TestCase):
         self.assertEqual(server.get_ui_preferences(user=self._user2()).get("theme"), "catppuccin-latte")
         self.assertEqual(server.get_ui_preferences(user=self._user2()).get("font"), "ibm-plex-sans")
 
+    def test_read_migrates_without_rewriting_saved_preferences(self):
+        import json
+        profile = user_assets.user_profile_dir("admin")
+        os.makedirs(profile)
+        path = os.path.join(profile, "ui_preferences.json")
+        for old, expected in [("default", "loden-light"), ("aurora-neon", "loden-dark"),
+                              ("unknown", "loden-light"), ("kanagawa-lotus", "kanagawa-lotus")]:
+            original = json.dumps({"theme": old, "font": "inter"})
+            with open(path, "w") as saved:
+                saved.write(original)
+            self.assertEqual(user_assets.load_ui_preferences("admin"), {"theme": expected, "font": "inter"})
+            with open(path) as saved:
+                self.assertEqual(saved.read(), original)
+
+    def test_supported_themes_and_dark_toggle_persist(self):
+        from ui_preferences import VALID_THEMES, RETIRED_THEMES
+        for theme in VALID_THEMES:
+            payload = server.UiPreferencesPayload(theme=theme, font="fira-sans")
+            server.update_ui_preferences(body=payload, user=self._user1())
+            self.assertEqual(server.get_ui_preferences(user=self._user1())["theme"], theme)
+        for theme in RETIRED_THEMES:
+            self.assertEqual(server.UiPreferencesPayload(theme=theme).theme, "loden-dark")
+        self.assertEqual(server.UiPreferencesPayload(theme="default").theme, "loden-light")
+
+    def test_partial_updates_preserve_companion_preference(self):
+        server.update_ui_preferences(body=server.UiPreferencesPayload(theme="kanagawa-wave", font="inter"), user=self._user1())
+        server.update_ui_preferences(body=server.UiPreferencesPayload(theme="loden-dark"), user=self._user1())
+        self.assertEqual(server.get_ui_preferences(user=self._user1()), {"theme": "loden-dark", "font": "inter"})
+        server.update_ui_preferences(body=server.UiPreferencesPayload(font="geist"), user=self._user1())
+        self.assertEqual(server.get_ui_preferences(user=self._user1()), {"theme": "loden-dark", "font": "geist"})
+
     def test_invalid_theme_and_font_fallback(self):
         payload = server.UiPreferencesPayload(theme="nonexistent-funky-theme", font="nonexistent-font")
-        self.assertEqual(payload.theme, "default")
-        self.assertEqual(payload.font, "inter")
+        self.assertEqual(payload.theme, "loden-light")
+        self.assertEqual(payload.font, "fira-sans")
 
 
 if __name__ == "__main__":

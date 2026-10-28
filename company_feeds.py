@@ -22,6 +22,9 @@ from urllib.parse import quote, quote_plus
 
 from postings import html_to_text, to_posting
 from user_assets import resolve_user_path
+from safe_fetch import fetch_page, JSON_TYPES, XML_TYPES, UnsafeURL
+from input_limits import ShortText
+from pydantic import TypeAdapter, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +32,69 @@ DEFAULT_LOCATION_PATTERN = r"wien|vienna|klosterneuburg|laxenburg|seibersdorf|au
 # A gendered title suffix such as "(m/w/d)" is a strong sign of a German-language ad.
 _GERMAN_TITLE_FORMS = re.compile(r"\((?:m/w/d|w/m/d|m/f/d|w/m/x|m/w/x|d/m/w|gn\*?|m/w|w/m)\)", re.I)
 USER_AGENT = "Jobweaver-feed-reader/1.0"
+MAX_COMPANIES = 50
+MAX_FEED_PAGES = 10
+MAX_FEED_POSTINGS = 1000
+MAX_FEED_DETAILS = 200
+MAX_TOTAL_FEED_REQUESTS = 250
+MAX_TOTAL_FEED_ROWS = 2000
 
 
 class FeedError(Exception):
     """A feed could not be read or did not have the expected shape."""
 
 
+def _bounded_inventory(items):
+    if len(items) > MAX_FEED_POSTINGS:
+        raise FeedError(f'feed inventory exceeds {MAX_FEED_POSTINGS} postings')
+    return items
+
+
+# Injected fixture readers accept url and the provider policy keyword arguments.
 Fetch = Callable[..., str]
 
 
-def http_fetch(url: str, headers: Optional[dict] = None, timeout: int = 40) -> str:
-    """GET a feed URL and return the body text. Tests replace this with a recorded sample."""
-    import requests
+def http_fetch(url: str, headers: Optional[dict] = None, timeout: int = 40, *,
+               allowed_hosts=None, allowed_types=JSON_TYPES + XML_TYPES) -> str:
+    """Read a bounded feed within the reader's exact-host HTTPS policy."""
+    if not allowed_hosts:
+        raise FeedError("feed fetch requires an explicit provider host")
+    try:
+        response = fetch_page(url, timeout=timeout, allowed_hosts=allowed_hosts, allowed_types=allowed_types,
+                              headers={"User-Agent": USER_AGENT, **(headers or {})})
+    except UnsafeURL as exc:
+        raise FeedError(str(exc)) from exc
+    # JSON and XML feeds normally use UTF-8; XML/JSON parsers below receive text.
+    response.encoding = response.encoding or "utf-8"
+    return response.text
 
-    resp = requests.get(url, headers={"User-Agent": USER_AGENT, **(headers or {})}, timeout=timeout)
-    resp.raise_for_status()
-    return resp.text
+
+def _identifier(entry):
+    connector, identifier = entry.get("connector"), entry.get("identifier")
+    if not isinstance(identifier, str):
+        raise FeedError("feed identifier must be a string")
+    if connector == "successfactors_rss":
+        labels = identifier.split(".")
+        valid = (len(identifier) <= 253 and len(labels) >= 2 and not labels[-1].isdigit()
+                 and all(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label) for label in labels))
+    elif connector == "personio":
+        valid = bool(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", identifier))
+    elif connector in ("greenhouse", "smartrecruiters"):
+        valid = bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", identifier))
+    else:
+        valid = False
+    if not valid:
+        raise FeedError(f"invalid {connector} feed identifier")
+    return identifier
+
+
+def _provider_fetch(entry, fetch):
+    identifier = _identifier(entry)
+    connector = entry["connector"]
+    host = {"greenhouse": "boards-api.greenhouse.io", "smartrecruiters": "api.smartrecruiters.com",
+            "personio": f"{identifier}.jobs.personio.de", "successfactors_rss": identifier}[connector].lower()
+    types = JSON_TYPES if connector in ("greenhouse", "smartrecruiters") else XML_TYPES
+    return lambda url: fetch(url, allowed_hosts=(host,), allowed_types=types)
 
 
 # --- text helpers ---------------------------------------------------------------------------------------------
@@ -79,14 +129,17 @@ def _row(connector: str, entry: dict, native_id: str, **fields) -> dict:
 # --- readers --------------------------------------------------------------------------------------------------
 
 def read_greenhouse(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) -> list:
-    url = f"https://boards-api.greenhouse.io/v1/boards/{quote(entry['identifier'])}/jobs?content=true"
+    fetch = _provider_fetch(entry, fetch)
+    url = f"https://boards-api.greenhouse.io/v1/boards/{quote(entry['identifier'], safe='')}/jobs?content=true"
     try:
         data = json.loads(fetch(url))
         jobs = data["jobs"]
     except (ValueError, KeyError, TypeError) as exc:
         raise FeedError(f"Greenhouse board '{entry['identifier']}': unexpected response ({exc})")
     rows = []
-    for job in jobs:
+    if not isinstance(jobs, list):
+        raise FeedError('Greenhouse jobs must be a list')
+    for job in _bounded_inventory(jobs):
         rows.append(_row(
             "greenhouse", entry, str(job.get("id")),
             title=(job.get("title") or "").strip(),
@@ -102,6 +155,7 @@ def read_greenhouse(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) 
 
 
 def read_personio(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) -> list:
+    fetch = _provider_fetch(entry, fetch)
     ident = entry["identifier"]
     try:
         root = ET.fromstring(fetch(f"https://{quote(ident)}.jobs.personio.de/xml"))
@@ -110,7 +164,7 @@ def read_personio(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) ->
     if root.tag != "workzag-jobs":
         raise FeedError(f"Personio '{ident}': unexpected root element '{root.tag}'")
     rows = []
-    for pos in root.findall("position"):
+    for pos in _bounded_inventory(root.findall("position")):
         pid = (pos.findtext("id") or "").strip()
         parts = []
         for block in pos.findall("jobDescriptions/jobDescription"):
@@ -137,6 +191,7 @@ _SF_TRAILING_PAREN = re.compile(r"\s*\(([^()]*)\)\s*$")
 def read_successfactors_rss(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) -> list:
     """`identifier` is the careers host, e.g. 'careers.omv.com'. Without a keyword the feed holds only the
     newest 20 items, so `location_keyword` (e.g. 'Vienna') is passed as the search keyword."""
+    fetch = _provider_fetch(entry, fetch)
     host = entry["identifier"]
     keyword = entry.get("location_keyword", "")
     url = f"https://{host}/services/rss/job/?locale=en_US&keywords={quote_plus(keyword)}"
@@ -147,7 +202,7 @@ def read_successfactors_rss(entry: dict, fetch: Fetch, keep: Optional[Callable] 
     except (ET.ParseError, AttributeError) as exc:
         raise FeedError(f"SuccessFactors feed '{host}': unexpected response ({exc})")
     rows, seen_links, seen_titles = [], set(), set()
-    for item in items:
+    for item in _bounded_inventory(items):
         link = (item.findtext("link") or "").strip().split("?")[0]  # drop the feed's tracking parameters
         if not link or link in seen_links:
             continue
@@ -178,9 +233,13 @@ def read_successfactors_rss(entry: dict, fetch: Fetch, keep: Optional[Callable] 
 
 def read_smartrecruiters(entry: dict, fetch: Fetch, keep: Optional[Callable] = None) -> list:
     """The list call carries no ad text, so `keep(stub)` decides which postings are worth one detail call each."""
-    ident = quote(entry["identifier"])
-    stubs, offset = [], 0
+    fetch = _provider_fetch(entry, fetch)
+    ident = quote(entry["identifier"], safe="")
+    stubs, offset, pages = [], 0, 0
     while True:
+        if pages >= MAX_FEED_PAGES:
+            raise FeedError(f'SmartRecruiters pagination exceeds {MAX_FEED_PAGES} pages')
+        pages += 1
         try:
             page = json.loads(fetch(f"https://api.smartrecruiters.com/v1/companies/{ident}/postings?limit=100&offset={offset}"))
             content = page["content"]
@@ -189,10 +248,11 @@ def read_smartrecruiters(entry: dict, fetch: Fetch, keep: Optional[Callable] = N
         except (ValueError, KeyError, TypeError) as exc:
             raise FeedError(f"SmartRecruiters '{entry['identifier']}': unexpected response ({exc})")
         stubs.extend(content)
+        _bounded_inventory(stubs)
         offset += len(content)
         if not content or offset >= int(page.get("totalFound") or 0):
             break
-    rows = []
+    rows, details = [], 0
     for stub in stubs:
         loc = stub.get("location") or {}
         location = loc.get("fullLocation") or ", ".join(x for x in (loc.get("city"), loc.get("country")) if x)
@@ -201,8 +261,11 @@ def read_smartrecruiters(entry: dict, fetch: Fetch, keep: Optional[Callable] = N
         candidate = {"title": stub.get("name") or "", "location": location}
         if keep and not keep(candidate):
             continue
+        if details >= MAX_FEED_DETAILS:
+            raise FeedError(f'SmartRecruiters detail requests exceed {MAX_FEED_DETAILS}')
+        details += 1
         try:
-            detail = json.loads(fetch(f"https://api.smartrecruiters.com/v1/companies/{ident}/postings/{quote(str(stub['id']))}"))
+            detail = json.loads(fetch(f"https://api.smartrecruiters.com/v1/companies/{ident}/postings/{quote(str(stub['id']), safe='')}"))
             sections = (detail.get("jobAd") or {}).get("sections") or {}
         except (ValueError, KeyError, TypeError) as exc:
             raise FeedError(f"SmartRecruiters '{entry['identifier']}' posting {stub.get('id')}: unexpected response ({exc})")
@@ -324,18 +387,44 @@ def load_companies(username: Optional[str]) -> dict:
     except FileNotFoundError:
         return {"filters": {}, "companies": []}
     companies = data.get("companies") or []
+    _validate_companies(companies)
     for i, entry in enumerate(companies):
         if entry.get("connector") not in READERS:
             raise FeedError(f"companies.json entry {i} ('{entry.get('name')}'): unknown connector '{entry.get('connector')}'")
         if not entry.get("identifier"):
             raise FeedError(f"companies.json entry {i} ('{entry.get('name')}'): no identifier")
+        _identifier(entry)
     return {"filters": data.get("filters") or {}, "companies": companies}
+
+
+def _validate_companies(companies):
+    if not isinstance(companies, list) or len(companies) > MAX_COMPANIES:
+        raise FeedError(f'companies must be a list of at most {MAX_COMPANIES} entries')
+    for entry in companies:
+        if not isinstance(entry, dict):
+            raise FeedError('company entries must be objects')
+        try:
+            for key in ('name', 'location_keyword'):
+                if key in entry:
+                    TypeAdapter(ShortText).validate_python(entry[key])
+        except ValidationError as exc:
+            raise FeedError('company name/location keyword exceeds 200 characters or is invalid') from exc
 
 
 def fetch_company_postings(config: dict, fetch: Optional[Fetch] = None,
                            log_fn: Optional[Callable] = None, now: Optional[datetime] = None) -> tuple:
     """Run every company in `config` and return (rows, errors). One company failing never stops the others."""
-    fetch = fetch or http_fetch  # looked up now, so tests can replace it
+    original_fetch = fetch or http_fetch  # looked up now, so tests can replace it
+    requests = 0
+
+    def fetch(url, **kwargs):
+        nonlocal requests
+        if requests >= MAX_TOTAL_FEED_REQUESTS:
+            raise FeedError(f'company collection exceeds {MAX_TOTAL_FEED_REQUESTS} feed requests')
+        requests += 1
+        return original_fetch(url, **kwargs)
+
+    _validate_companies(config.get('companies', []))
     log_fn = log_fn or (lambda msg, level="info": logger.info(msg))
     defaults = config.get("filters") or {}
     rows, errors = [], []
@@ -361,5 +450,9 @@ def fetch_company_postings(config: dict, fetch: Optional[Fetch] = None,
             continue
         kept = [r for r in found if matches_filters(r, filters, now)]
         log_fn(f"Company feed {label}: {len(found)} open, {len(kept)} after filters.", "info")
+        if len(rows) + len(kept) > MAX_TOTAL_FEED_ROWS:
+            errors.append(f'company collection exceeds {MAX_TOTAL_FEED_ROWS} rows; remaining companies skipped')
+            log_fn(errors[-1], 'error')
+            break
         rows.extend(kept)
     return rows, errors

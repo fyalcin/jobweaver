@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 
 export function useDailyTab({ addToast, aiTone }) {
+  const api = useApi();
   const [dailyDates, setDailyDates] = useState([]);
   const [selectedDailyDate, setSelectedDailyDate] = useState('');
   const [dailyJobs, setDailyJobs] = useState([]);
@@ -19,7 +20,7 @@ export function useDailyTab({ addToast, aiTone }) {
     } catch {
       addToast('Failed to load daily scrape dates.', 'error');
     }
-  }, [addToast, selectedDailyDate]);
+  }, [addToast, api, selectedDailyDate]);
 
   const fetchDailyJobs = useCallback(async (dateStr) => {
     if (!dateStr) return;
@@ -32,7 +33,7 @@ export function useDailyTab({ addToast, aiTone }) {
     } finally {
       setDailyLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   useEffect(() => {
     if (selectedDailyDate) {
@@ -62,7 +63,7 @@ export function useDailyTab({ addToast, aiTone }) {
         return next;
       });
     }
-  }, [aiTone, addToast, fetchDailyJobs, selectedDailyDate]);
+  }, [aiTone, api, addToast, fetchDailyJobs, selectedDailyDate]);
 
   return {
     dailyDates,

@@ -42,7 +42,7 @@ export function Login({ onLogin, demo }) {
           </div>
           <span>Jobweaver</span>
         </h1>
-        {demo?.demo && <p className="demo-login-note">Explore a fictional job search. Scores and documents are prepared examples. Sign in with <strong>demo / demo</strong>.</p>}
+        {demo?.demo && <p className="demo-login-note">Explore a fictional job search. Ratings and documents are hand-prepared examples. No live model or verifier ran. Sign in with <strong>demo / demo</strong>.</p>}
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.85rem' }}>
           Username
           <input
@@ -67,8 +67,8 @@ export function Login({ onLogin, demo }) {
           />
         </label>
         {error && <div style={{ color: '#ef4444', fontSize: '0.82rem' }}>{error}</div>}
-        <button type="submit" className="input-base" disabled={submitting}
-          style={{ cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+        <button type="submit" className="btn btn-primary" disabled={submitting}
+          style={{ width: '100%', padding: '0.65rem', cursor: submitting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
           <LogIn size={16} />
           {submitting ? 'Signing in…' : demo?.demo ? 'Explore the demo' : 'Sign in'}
         </button>

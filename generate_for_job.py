@@ -8,7 +8,7 @@ parsed-PDF validation, immutable output bundles) through `daily_scraper._generat
 with the engine and the documents model from the user's settings. It makes the model calls that
 generation makes and no other network calls: none for the CV (every approved bullet is kept; one in
 compact mode), and for the letter a fact plan, then one to three rounds of writing and verification
-(the verifier is `letter_verifier_model`, by default another model family than the writer).
+(the verifier is `letter_verifier_model`, automatically following a custom writer's endpoint).
 `plan` lists each planned fact with the posting need it answers and its allowed framing; `warnings`
 lists rejected plan and letter attempts.
 
@@ -29,10 +29,10 @@ CV text, the approved CV, the career record, claim policy, document instructions
 engine, tone, CV profile and the job's text, and while the letter's date is still today. `--force` rebuilds regardless.
 """
 import argparse
+from operation_budget import operation, check, current, QuotaExceeded
 import fcntl
 import json
 import os
-import re
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -66,7 +66,7 @@ def fingerprint(job: dict, username: str, config: dict, cv_text: str, model: str
                     if job.get("use_research_in_docs", True) is not False else "",
     }
     parts = {
-        "pipeline": reviewed_documents.PIPELINE_VERSION, "verifier": reviewed_documents.verifier_model(username),
+        "pipeline": reviewed_documents.PIPELINE_VERSION, "verifier": reviewed_documents.verifier_model(username, model),
         "model": model, "engine": engine, "tone": tone, "compact": bool(compact), "profile": profile,
         "cv_text": digest(cv_text)[:16],
         "approved_cv": digest(approved.read_bytes())[:16] if approved.exists() else None,
@@ -79,9 +79,8 @@ def fingerprint(job: dict, username: str, config: dict, cv_text: str, model: str
 
 
 def pdf_pages(path) -> int | None:
-    result = subprocess.run(["pdfinfo", str(path)], capture_output=True, timeout=10)
-    found = re.search(r"^Pages:\s+(\d+)", result.stdout.decode("utf-8", "replace"), re.M)
-    return int(found.group(1)) if found else None
+    from document_artifacts import inspect_pdf
+    return inspect_pdf(path)['pages']
 
 
 def verify_current(output: Path, record: dict, inputs_digest: str, today: str) -> str | None:
@@ -116,8 +115,19 @@ def job_lock(path: Path):
     """One run per job at a time across processes; a second caller waits, then finds the bundle."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        shared = current()
+        if shared is None:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        else:
+            while True:
+                shared.check()
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    shared.wait(.05)
         try:
+            check()
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
@@ -154,6 +164,7 @@ def _success(job_id, output, record, cached, cv_text, username, reason=None) -> 
         regenerated_because=reason)
 
 
+@operation('documents')
 def run(username: str, job_id: str, force: bool = False, language: str | None = None) -> tuple[dict, int]:
     """Return (result dict, exit code)."""
     import db
@@ -167,6 +178,7 @@ def run(username: str, job_id: str, force: bool = False, language: str | None = 
     user = db.get_user_by_username(username)
     if not user:
         return _result(job_id, False, errors=[f"unknown user: {username}"]), 2
+    current().attribute(user["id"], "cli")  # Model requests count against this User's daily quota.
     job = db.get_job_by_id(job_id, user["id"])
     if not job:
         return _result(job_id, False, errors=[f"job not found for {username}: {job_id}"]), 2
@@ -217,6 +229,7 @@ def run(username: str, job_id: str, force: bool = False, language: str | None = 
             built = outcome["built"][kind]
             record[kind] = {"revision": built["revision"], "published_name": built["published_name"],
                             "source_file": built["source_file"]}
+        check()
         atomic_write(stored, json.dumps(record, ensure_ascii=False, indent=1))
         return _success(job_id, output, record, False, cv_text, username, reason), 0
 
@@ -242,6 +255,8 @@ def main(argv=None) -> int:
     real_stdout, sys.stdout = sys.stdout, sys.stderr
     try:
         result, code = run(args.user, args.job, args.force, args.language)
+    except QuotaExceeded as exc:
+        result, code = _result(args.job, False, errors=[str(exc)], retry_after_seconds=exc.retry_after), 1
     except Exception as exc:  # last resort: still one JSON object, non-zero exit
         result, code = _result(args.job, False, errors=[f"{type(exc).__name__}: {exc}"]), 1
     finally:

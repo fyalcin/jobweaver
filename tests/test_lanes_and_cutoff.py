@@ -26,6 +26,15 @@ CUT_AD = "Wir suchen eine:n Python-Entwickler:in in Wien. Deine Aufgaben: Datenp
 ENGLISH_AD = "Join our team in Vienna. What you bring: Python, SQL and curiosity."
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class DescriptionIncompleteTest(unittest.TestCase):
     def test_ad_with_requirements_section_is_complete(self):
         self.assertFalse(job_policy.description_incomplete(FULL_AD))

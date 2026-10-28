@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from german import german_level_compatible, normalize_german_level
 
 
@@ -16,7 +16,7 @@ class AnalysisPoint(BaseModel):
 
 
 class MatchAnalysis(BaseModel):
-    tier: StrictStr = ''  # Ignored: tier always comes from validated score.
+    tier: StrictStr = ''  # Legacy display key; overwritten by the deterministic rating.
     synthesis: StrictStr = ''
     strengths: list[AnalysisPoint] = Field(default_factory=list)
     gaps: list[AnalysisPoint] = Field(default_factory=list)
@@ -31,6 +31,23 @@ class Constraint(BaseModel):
     evidence: StrictStr
 
 
+class RequirementCheck(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    requirement: StrictStr = Field(min_length=1, max_length=500, pattern=r'\S')
+    importance: Literal['must', 'nice']
+    posting_quote: StrictStr = Field(min_length=1, max_length=4000)
+    coverage: Literal['shown', 'related', 'missing']
+    cv_quote: StrictStr = Field(default='', max_length=4000)
+
+
+class PreferenceConflict(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    preference: StrictStr = Field(min_length=1, max_length=500, pattern=r'\S')
+    notes_quote: StrictStr = Field(min_length=1, max_length=4000)
+    posting_quote: StrictStr = Field(min_length=1, max_length=4000)
+    severity: Literal['hard', 'soft']
+
+
 class Extraction(BaseModel):
     german_level: Literal['none', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'native', 'unknown']
     summary: StrictStr = Field(min_length=1)
@@ -41,7 +58,9 @@ class Extraction(BaseModel):
     salary_currency: Literal['EUR', 'USD', 'GBP', 'CHF', 'unknown'] = 'unknown'
     salary_payments: int | None = Field(default=None, ge=1, le=24)
     salary_country: StrictStr = ''
-    match_score: StrictInt | None = Field(default=None, ge=0, le=100)
+    match_checks: list[RequirementCheck] | None = Field(default=None, max_length=128)
+    preference_conflicts: list[PreferenceConflict] = Field(default_factory=list, max_length=32)
+    grounding_issues: list[dict] = Field(default_factory=list, exclude=True)
     match_analysis: MatchAnalysis | None = None
     tools_technologies: list[StrictStr] = Field(default_factory=list)
     requirements: list[StrictStr] = Field(default_factory=list)
@@ -88,12 +107,13 @@ def analysis_response_format(matching: bool, include_cleanup: bool) -> dict:
     schema = Extraction.model_json_schema()
     defs = schema.get('$defs', {})
     if matching:
-        # With a CV the score and analysis must be present, not null.
-        schema['properties']['match_score'] = {'type': 'integer'}
+        schema['properties']['match_checks'] = {'type': 'array', 'items': {'$ref': '#/$defs/RequirementCheck'}}
         schema['properties']['match_analysis'] = {'$ref': '#/$defs/MatchAnalysis'}
     else:
-        for key in ('match_score', 'match_analysis'):
+        for key in ('match_checks', 'preference_conflicts', 'match_analysis'):
             schema['properties'].pop(key)
+    schema['properties'].pop('grounding_issues', None)
+    defs['MatchAnalysis']['properties'].pop('tier', None)
     if include_cleanup:
         schema['properties']['cleaned_description'] = {'type': 'string'}
     return {'type': 'json_schema',
@@ -116,14 +136,139 @@ def description_incomplete(text):
     return isinstance(text, str) and bool(text.strip()) and not _REQUIREMENTS_MARKER.search(text)
 
 
-def tier(score):
-    if score is None:
-        return 'Not ranked'
-    return 'Strong Match' if score >= 80 else 'Good Match' if score >= 65 else 'Moderate Match' if score >= 50 else 'Reach'
+# Evidence-based match rating (design: docs/audits/2026-10-24/match-rating.md). The model only
+# judges single requirements; this fixed rule turns the verified judgements into a label.
+RATINGS = ('Poor', 'Stretch', 'Decent', 'Good', 'Great')
+_COVERAGE = {'shown', 'related', 'missing'}
+_SEVERITY = {'soft', 'hard'}
+
+
+def _base_rating(checks):
+    for check in checks:
+        if check.get('coverage') not in _COVERAGE or check.get('importance') not in ('must', 'nice'):
+            raise ValueError(f'Unknown requirement check: {check!r}')
+    checks = deduplicate_checks(checks)
+    must = [c for c in checks if c['importance'] == 'must']
+    nice = [c for c in checks if c['importance'] == 'nice']
+    pool = must or nice
+    missing = sum(c['coverage'] == 'missing' for c in pool)
+    related = sum(c['coverage'] == 'related' for c in pool)
+    share = missing / len(pool)
+    nice_covered = not nice or sum(c['coverage'] != 'missing' for c in nice) >= len(nice) / 2
+    if share == 0 and related <= 1 and nice_covered:
+        level = 4
+    elif share == 0:
+        level = 3
+    elif missing == 1 and share <= 1 / 3:
+        level = 2
+    elif share <= 1 / 2:
+        level = 1
+    else:
+        level = 0
+    # A posting without firm requirements cannot earn the top label.
+    return level if must else min(level, 3)
+
+
+def match_rating(checks, conflicts=(), eligibility_state='eligible'):
+    """Label from requirement checks, preference conflicts and the eligibility state."""
+    for conflict in conflicts:
+        if conflict.get('severity') not in _SEVERITY:
+            raise ValueError(f'Unknown preference conflict: {conflict!r}')
+    if eligibility_state == 'ineligible' or any(c['severity'] == 'hard' for c in conflicts):
+        return 'Blocked'
+    if not checks:
+        return 'Unrated'
+    soft = sum(c['severity'] == 'soft' for c in deduplicate_conflicts(conflicts))
+    return RATINGS[max(0, _base_rating(checks) - soft)]
+
+
+def judgement_calls(checks, conflicts=(), eligibility_state='eligible'):
+    """Related must-haves whose downgrade to missing would change the label."""
+    checks = deduplicate_checks(checks)
+    label = match_rating(checks, conflicts, eligibility_state)
+    if label not in RATINGS:
+        return []
+    calls = []
+    for i, check in enumerate(checks):
+        if check['importance'] != 'must' or check['coverage'] != 'related':
+            continue
+        changed = [dict(c, coverage='missing') if j == i else c for j, c in enumerate(checks)]
+        alternative = match_rating(changed, conflicts, eligibility_state)
+        if alternative != label:
+            calls.append({'requirement': check['requirement'], 'if_missing': alternative})
+    return calls
+
+
+def _identity(text):
+    return ' '.join(str(text).casefold().split()).strip(' .,;:!?')
+
+
+def deduplicate_checks(checks):
+    """Repeated evidence cannot improve the tally. Retain the stricter duplicate."""
+    result = []
+    for check in checks:
+        previous = next((c for c in result if _identity(c['requirement']) == _identity(check['requirement'])), None)
+        if previous is None:
+            result.append(dict(check))
+        else:
+            if check['importance'] == 'must' and previous['importance'] != 'must':
+                previous.update(importance='must', posting_quote=check['posting_quote'])
+            if ('shown', 'related', 'missing').index(check['coverage']) > ('shown', 'related', 'missing').index(previous['coverage']):
+                previous.update(coverage=check['coverage'], cv_quote=check.get('cv_quote', ''))
+    return result
+
+
+def deduplicate_conflicts(conflicts):
+    result = []
+    for conflict in conflicts:
+        previous = next((c for c in result if _identity(c['preference']) == _identity(conflict['preference'])), None)
+        if previous is None:
+            result.append(dict(conflict))
+        elif conflict['severity'] == 'hard' and previous['severity'] != 'hard':
+            previous.update(severity='hard', notes_quote=conflict['notes_quote'],
+                            posting_quote=conflict['posting_quote'])
+    return result
+
+
+def normalize_rating_config(config):
+    """Read-time migration: old numeric thresholds deterministically become Good."""
+    config = dict(config)
+    auto = dict(config.get('auto_generate') or {})
+    auto.pop('min_match_score', None)
+    auto.setdefault('min_rating', 'good')
+    config['auto_generate'] = auto
+    return config
+
+
+def analysis_current(job, expected_fingerprint):
+    if job.get('analysis_fingerprint') or job.get('match_score') is not None or job.get('match_rating'):
+        return (job.get('analysis_schema') == 2 and job.get('analysis_state') == 'complete'
+                and bool(job.get('processed', 1)) and job.get('analysis_fingerprint') == expected_fingerprint)
+    return None
+
+
+def apply_rating(job, config, expected_fingerprint=None):
+    """Refresh policy-dependent labels; preserve old numeric analyses as historical."""
+    job['eligibility'] = eligibility(job, config)
+    if expected_fingerprint is not None:
+        job['analysis_current'] = analysis_current(job, expected_fingerprint)
+    if job.get('analysis_schema') == 2:
+        checks, conflicts = job.get('match_checks') or [], job.get('preference_conflicts') or []
+        state = job['eligibility']['state']
+        job['match_rating'] = match_rating(checks, conflicts, state)
+        job['judgement_calls'] = judgement_calls(checks, conflicts, state)
+    return job
+
+
+def rating_sort_key(job):
+    label = job.get('match_rating')
+    rank = RATINGS.index(label) if job.get('analysis_current') is True and label in RATINGS else -1
+    missing = sum(c.get('importance') == 'must' and c.get('coverage') == 'missing' for c in job.get('match_checks') or [])
+    return rank, -missing, str(job.get('date_scraped') or '')
 
 
 def fingerprint(cv, model, policy=None):
-    return hashlib.sha256(json.dumps({'cv': cv or '', 'model': model, 'policy': policy or {}, 'schema': 1},
+    return hashlib.sha256(json.dumps({'cv': cv or '', 'model': model, 'policy': policy or {}, 'schema': 2},
                                      sort_keys=True).encode()).hexdigest()
 
 
@@ -163,11 +308,11 @@ def eligibility(job, config):
 
 
 def qualifies(job, config, expected_fingerprint=None):
-    score = job.get('match_score')
-    # Pandas represents validated integer DB scores as floats beside nulls.
-    if isinstance(score, float) and score.is_integer():
-        score = int(score)
-    return ((expected_fingerprint is None or job.get('analysis_fingerprint') == expected_fingerprint)
-            and isinstance(score, int) and not isinstance(score, bool)
-            and score > config.get('auto_generate', {}).get('min_match_score', 65)
-            and eligibility(job, config)['state'] == 'eligible')
+    config = normalize_rating_config(config)
+    current = analysis_current(job, expected_fingerprint) if expected_fingerprint is not None else job.get('analysis_current')
+    if current is not True or job.get('analysis_schema') != 2:
+        return False
+    state = eligibility(job, config)['state']
+    label = match_rating(job.get('match_checks') or [], job.get('preference_conflicts') or [], state)
+    minimum = config['auto_generate']['min_rating'].title()
+    return state == 'eligible' and label in RATINGS and minimum in RATINGS and RATINGS.index(label) >= RATINGS.index(minimum)

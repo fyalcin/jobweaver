@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User, RefreshCw, Save, RotateCcw, FileText, AlertTriangle, MessageSquareText, Sparkles } from 'lucide-react';
+import { User, RefreshCw, Save, RotateCcw, FileText, AlertTriangle, MessageSquareText, Lock } from 'lucide-react';
+
+function formatAssetPath(path) {
+  return path ? String(path).replace(/^(?:\.\.\/)+tmp\/[^/]+\//, '') : path;
+}
 
 function NotesEditor({ notes, savingNotes, saveNotes }) {
   const [draft, setDraft] = useState(notes?.notes || '');
@@ -18,10 +22,10 @@ function NotesEditor({ notes, savingNotes, saveNotes }) {
   return (
     <>
       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <FileText size={13} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+          <FileText size={13} style={{ flexShrink: 0 }} />
           {notes?.exists
-            ? <>Loaded from: <code style={{ fontSize: '0.75rem' }}>{notes.loaded_from}</code></>
+            ? <><span>Loaded from:</span> <code style={{ fontSize: '0.75rem' }}>{formatAssetPath(notes.loaded_from)}</code></>
             : <>No standing notes file yet &mdash; start typing below and save to create it.</>}
         </span>
       </div>
@@ -82,8 +86,7 @@ function InstructionsEditor({ instructions, saving, onSave }) {
   return (
     <>
       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-        These instructions are appended to every AI prompt when generating documents for you
-        (in addition to the selected CV profile). Leave a box empty for no extra instructions.
+        Extra drafting preferences for your CV and cover letter (in addition to the selected CV profile). Leave a box empty if you need no extra instructions.
       </div>
       <div className="form-group">
         <label className="form-label"><FileText size={13} style={{ verticalAlign: '-2px' }} /> CV-specific instructions</label>
@@ -124,6 +127,23 @@ function InstructionsEditor({ instructions, saving, onSave }) {
   );
 }
 
+function CvReadOnly({ cv }) {
+  // The text comes from the career record (ADR-0004); the server refuses saves here.
+  return (
+    <>
+      <div role="note" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <Lock size={13} style={{ flexShrink: 0 }} />
+        Read-only: this text comes from your {formatAssetPath(cv.loaded_from) || 'career record'}. Edit the career record to change it.
+      </div>
+      <pre style={{
+        margin: 0, maxHeight: '55vh', overflow: 'auto', padding: '0.75rem', whiteSpace: 'pre-wrap',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: '13px', lineHeight: '1.5',
+        background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px',
+      }}>{cv.content}</pre>
+    </>
+  );
+}
+
 function CvEditor({ cv, savingCv, saveCv }) {
   const [draft, setDraft] = useState(cv.content);
   const dirty = draft !== cv.content;
@@ -139,25 +159,32 @@ function CvEditor({ cv, savingCv, saveCv }) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  const pathsDiffer = cv.loaded_from !== cv.save_path;
 
   return (
     <>
       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <FileText size={13} />
+          <FileText size={13} style={{ flexShrink: 0 }} />
           {cv.exists
-            ? <>Loaded from: <code style={{ fontSize: '0.75rem' }}>{cv.loaded_from}</code></>
-            : <>No CV file on disk yet &mdash; start typing below and save to create it.</>}
+            ? <>Loaded from: <code style={{ fontSize: '0.75rem' }}>{formatAssetPath(cv.loaded_from)}</code></>
+            : <>No CV file yet &mdash; saving creates <code style={{ fontSize: '0.75rem' }}>{formatAssetPath(cv.save_path)}</code>.</>}
         </span>
-        {pathsDiffer && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <AlertTriangle size={13} color="#f59e0b" />
-            Showing the generic base template CV. Saving creates your own copy at{' '}
-            <code style={{ fontSize: '0.75rem' }}>{cv.save_path}</code>.
-          </span>
-        )}
       </div>
+      {cv.missing_message && (
+        <div role="status" className="cv-getting-started" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(245,158,11,0.35)', backgroundColor: 'rgba(245,158,11,0.07)', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <AlertTriangle size={15} color="#f59e0b" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
+          <span style={{ flex: 1, minWidth: '12rem' }}>
+            <strong>Getting started:</strong> job scoring and document generation stay off until you save your own CV here.
+            {cv.template ? ' You can start from the fictional example and replace it with your details.' : ''}
+          </span>
+          {cv.template && (
+            <button type="button" className="btn btn-secondary" disabled={draft.trim() !== ''} onClick={() => setDraft(cv.template)}
+              style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem' }}>
+              Start from the example
+            </button>
+          )}
+        </div>
+      )}
 
       <textarea
         className="input-base"
@@ -236,8 +263,7 @@ export function PersonalizeTab({
       <div className="card">
         <h2 className="card-title"><User size={20} /> Personal CV (Plain Text)</h2>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          This text is injected into every AI prompt: job match scoring, document generation,
-          and refinement all read it. Edit it here and save &mdash; the file on disk is updated immediately.
+          Source record used for requirement checks, match ratings, and application drafts. Edit it here and save &mdash; the file on disk is updated immediately.
         </div>
 
         {loadingCv && (
@@ -249,16 +275,16 @@ export function PersonalizeTab({
         {!loadingCv && cv && (
           // Keyed by disk-truth version so the editor resets when a fresh
           // copy is loaded or saved, while keeping local draft state in between.
-          <CvEditor key={cvVersion} cv={cv} savingCv={savingCv} saveCv={saveCv} />
+          cv.read_only
+            ? <CvReadOnly cv={cv} />
+            : <CvEditor key={cvVersion} cv={cv} savingCv={savingCv} saveCv={saveCv} />
         )}
       </div>
 
       <div className="card" style={{ marginTop: '2rem' }}>
-        <h2 className="card-title"><Sparkles size={20} /> Recent Experience &amp; Standing Notes</h2>
+        <h2 className="card-title"><FileText size={20} /> Recent Experience &amp; Standing Notes</h2>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Quickly jot down new tools, technologies, recent projects, or things you've been working on lately.
-          These notes are automatically appended to your CV text during job match scoring and document generation,
-          authorizing the AI to highlight them without having to rewrite your main CV.
+          Notes on recent projects, tools, and work preferences (location, work model, travel). Checked alongside your CV during requirement matching and document drafting.
         </div>
 
         {loadingNotes && (
@@ -278,7 +304,7 @@ export function PersonalizeTab({
       </div>
 
       <div className="card" style={{ marginTop: '2rem' }}>
-        <h2 className="card-title"><MessageSquareText size={20} /> AI Generation Instructions</h2>
+        <h2 className="card-title"><MessageSquareText size={20} /> Document Drafting Instructions</h2>
         {!scraperConfig ? (
           <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <RefreshCw className="spinner" size={24} style={{ margin: '0 auto', display: 'block' }} />

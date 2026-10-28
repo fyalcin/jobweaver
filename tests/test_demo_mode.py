@@ -4,6 +4,8 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from starlette.requests import Request
+from starlette.responses import Response
 
 import demo_mode
 import generators
@@ -14,11 +16,13 @@ ON = {"JOBWEAVER_DEMO": "1"}
 
 
 def guard(method, path):
-    request = SimpleNamespace(method=method, url=SimpleNamespace(path=path))
+    request = Request({'type': 'http', 'method': method, 'path': path, 'scheme': 'http',
+                       'headers': [(b'host', b'localhost')], 'query_string': b''})
 
     async def call_next(_):
-        return "passed"
-    return asyncio.run(server.demo_mode_guard(request, call_next))
+        return Response('passed')
+    response = asyncio.run(server.demo_mode_guard(request, call_next))
+    return 'passed' if response.status_code == 200 else response
 
 
 class GuardTest(unittest.TestCase):

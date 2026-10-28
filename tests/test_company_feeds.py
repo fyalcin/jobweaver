@@ -44,6 +44,15 @@ SF = {"name": "OMV", "connector": "successfactors_rss", "identifier": "careers.o
 SR = {"name": "IMS", "connector": "smartrecruiters", "identifier": "IMSNanofabricationGmbH"}
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class ReaderTest(unittest.TestCase):
     def test_greenhouse(self):
         rows = cf.read_greenhouse(GH, fake_fetch)

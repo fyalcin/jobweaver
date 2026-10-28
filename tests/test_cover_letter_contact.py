@@ -13,12 +13,13 @@ class TestCoverLetterContact(unittest.TestCase):
             "skills": "Materials science, physics",
             "summary": "Process development role",
             "company_contact": "Frau Ursula Popp",
-            "match_score": 88
+            "match_checks": []
         }"""
         res = process_job_with_ai("Bewerbungen per E-Mail an Frau Ursula Popp", "CV text")
         self.assertEqual(res["company_contact"], "Frau Ursula Popp")
         self.assertEqual(res["german_level"], "B1")
-        self.assertEqual(res["match_score"], 88)
+        self.assertIsNone(res["match_score"])
+        self.assertEqual(res["match_rating"], "Unrated")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,15 @@ def _stub_ai(description, cv_text=None, model_name=None, denoise=True):
     }
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class ReprocessBackgroundTest(unittest.TestCase):
     """_run_reprocess_bg must poll its task row with the owning user_id.
 

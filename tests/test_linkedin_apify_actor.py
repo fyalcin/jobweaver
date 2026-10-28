@@ -50,6 +50,15 @@ def _legacy_item(**overrides):
     return item
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class _FakeDataset:
     def __init__(self, items):
         self._items = items

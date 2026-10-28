@@ -1,104 +1,57 @@
 import { useDemo } from '../../demoContext';
-import React, { useState } from 'react';
-import {
-  AlertCircle, RefreshCw, ChevronDown, Wand2, ArrowLeft, CheckCircle2,
-  Sparkles, Pencil, ExternalLink, FileText, Mail, Layers, Download, Briefcase,
-  X, SlidersHorizontal, Save, CheckSquare, Square, Info, Trash2, LayoutGrid, Table
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, RefreshCw, ChevronDown, MoreHorizontal, X } from 'lucide-react';
 import { STATUS_ORDER, STATUS_CONFIG } from '../../constants/status';
+import { RATINGS, RATING_GROUPS, RATING_DEFINITIONS, ratingLabel, ratingSummary, matchesStage, jobStatus, sourceLabel } from '../../constants/ratings';
+import { MatchRating } from '../MatchEvidence';
 import { AiTaskProgress } from '../AiTaskProgress';
-import { StatusSelect } from '../StatusControls';
 import { germanLevelLabel } from '../../constants/german';
 import { formatDateDisplay } from '../../constants/dates';
 
-const getMatchTier = (job) => {
-  if (job?.match_analysis?.tier) return job.match_analysis.tier;
-  if (typeof job?.data?.match_analysis?.tier === 'string') return job.data.match_analysis.tier;
-  if (job?.match_score == null || job?.match_score === undefined || job?.match_score === '') return null;
-  const score = Number(job.match_score);
-  if (isNaN(score)) return null;
-  if (score >= 80) return 'Strong Match';
-  if (score >= 65) return 'Good Match';
-  if (score >= 50) return 'Moderate Match';
-  return 'Reach';
-};
-
-const getTierBadgeClass = (tier) => {
-  switch (tier) {
-    case 'Strong Match': return 'table-tier-strong';
-    case 'Good Match': return 'table-tier-good';
-    case 'Moderate Match': return 'table-tier-moderate';
-    case 'Reach': return 'table-tier-reach';
-    default: return '';
-  }
-};
-
-const isJobStale = (job) => {
-  if (!job?.date_scraped) return false;
-  const status = job.status || (job.applied ? 'applied' : 'new');
-  if (status !== 'new') return false;
-  const age = (Date.now() - new Date(`${job.date_scraped}T00:00:00`).getTime()) / 86400000;
-  return age > 21;
-};
-
-/** Short display name for a job's Source label. */
-function sourceLabel(source) {
-  const value = String(source || '');
-  if (/^karriere/i.test(value)) return 'Karriere';
-  if (/^company feed/i.test(value)) return 'Company feed';
-  if (/^linkedin/i.test(value)) return 'LinkedIn';
-  if (value === 'manual') return 'Manual';
-  return value || 'Unknown';
-}
+const stageOptions = [['new', 'New'], ['interested', 'Shortlisted'], ['pipeline', 'Applied'], ['All', 'All']];
 
 export function JobsTab({
-  jobs, loading, appliedCount, actionableCount, sortedJobs, filteredJobs,
+  jobs, loading, appliedCount, sortedJobs,
   unprocessedJobs, reprocessTaskId, reprocessProgress, handleStartReprocess,
   searchQuery, setSearchQuery, germanFilter, setGermanFilter,
   statusFilter, setStatusFilter, sourceFilter, setSourceFilter,
-  scrapeDateFilter, setScrapeDateFilter, minMatchFilter, setMinMatchFilter,
+  scrapeDateFilter, setScrapeDateFilter, minimumRating, setMinimumRating,
   uniqueSources, uniqueScrapeDates, activeFilters, filteredOutCount, clearFilters, clearFilter,
-  applyView, quickViews, savedViews, saveCurrentView, deleteSavedView,
+  applyView, savedViews, saveCurrentView, deleteSavedView,
   selectedJobIds, selectedJobs, selectedCount, toggleSelectedJob, setVisibleSelection,
   batchGenProgress, batchGenSubmitting, batchGenTaskId, handleBatchGenerate, handleBatchGenerateForce, handleBatchGenerateCancel,
   batchMarkStatus, setBatchMarkStatus, batchMarkActive, handleBatchMark,
-  handleSort, sortConfig, setSortConfig, viewMode, setViewMode, paginatedJobs, setSelectedJobDetails, getScoreBadgeClass,
+  sortConfig, setSortConfig, paginatedJobs, setSelectedJobDetails,
   updateJobStatus, setEditingJob, setEditTitle, setEditCompany, handleJobsGenerateCV, generatingJobsDocs, handleJobsGenerateLetter, handleJobsGenerateBoth,
-  handleDeleteJob,
+  handleDeleteJob, onAddPosting,
   currentPage, setCurrentPage, itemsPerPage, setItemsPerPage, totalPages
 }) {
   const demo = useDemo();
   const [unprocessedExpanded, setUnprocessedExpanded] = useState(false);
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
-  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
-  const sortCol = (key) => `${sortConfig.key === key ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}`;
-
-  const defaultGerman = 'All';
-  const isDefaultFilterState = germanFilter === defaultGerman &&
-    (statusFilter === 'new' || !statusFilter) &&
-    (scrapeDateFilter === '__recent21' || !scrapeDateFilter) &&
-    sourceFilter === 'All' &&
-    minMatchFilter === '' &&
-    !searchQuery.trim();
-
-  return (
-    <>
-      {/* Compact stats row */}
-      <div className="jobs-stats-summary-row">
-        <span><span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{jobs.length.toLocaleString()}</span> total jobs</span>
-        <span style={{ opacity: 0.4 }}>·</span>
-        <span><span style={{ color: 'var(--success-color)', fontWeight: 600 }}>{appliedCount}</span> applied</span>
-        <span style={{ opacity: 0.4 }}>·</span>
-        <button className="metric-link" title="New jobs scoring above 65 with German requirements compatible with B1" onClick={() => applyView(quickViews.inbox)}>
-          <span style={{ color: 'var(--warning-color)', fontWeight: 600 }}>{actionableCount}</span> need attention <Info size={12} />
-        </button>
-        <span style={{ opacity: 0.4 }}>·</span>
-        <span style={{ color: 'var(--primary-light, #818cf8)', fontWeight: 500 }}>{sortedJobs.length.toLocaleString()} visible</span>
-        {filteredOutCount > 0 && <><span style={{ opacity: 0.4 }}>·</span><span>{filteredOutCount.toLocaleString()} hidden by filters</span></>}
-      </div>
-
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [openActions, setOpenActions] = useState(null);
+  const actionsRef = useRef(null);
+  const triggerRef = useRef(null);
+  const [expandedGroups, setExpandedGroups] = useState({ Poor: false, Blocked: false });
+  const failedAnalysisJobs = unprocessedJobs.filter(job => job.analysis_state === 'failed');
+  const shortError = text => String(text || '').length > 160 ? `${String(text).slice(0, 157)}…` : String(text || '');
+  useEffect(() => {
+    if (openActions == null) return;
+    const outside = event => {
+      if (!actionsRef.current?.contains(event.target) && !triggerRef.current?.contains(event.target)) setOpenActions(null);
+    };
+    const escape = event => {
+      if (event.key === 'Escape') { event.preventDefault(); setOpenActions(null); triggerRef.current?.focus(); }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [openActions]);
+  const closeAnd = action => { setOpenActions(null); triggerRef.current?.focus(); action(); };
+  const menuAction = (label, action, disabled = false) => <button type="button" disabled={disabled} onClick={() => closeAnd(action)}>{label}</button>;
+  return <div className="calm-jobs">
+    <div className="calm-jobs-heading"><h2>Jobs</h2><button className="btn btn-primary" disabled={demo} onClick={onAddPosting}>Add posting</button></div>
+    <p className="jobs-stats-summary-row">{jobs.length.toLocaleString()} jobs · {appliedCount} in the application pipeline · {sortedJobs.length} visible{filteredOutCount > 0 && ` · ${filteredOutCount} hidden by filters`}</p>
       {/* Processing Queue Banner */}
       {unprocessedJobs.length > 0 && (
         <div style={{
@@ -114,7 +67,7 @@ export function JobsTab({
               <div>
                 {reprocessTaskId && reprocessProgress ? (
                   <span style={{ color: 'var(--text-primary)' }}>
-                    Processing with AI…{' '}
+                    {reprocessProgress.status === 'queued' ? 'Waiting for an available worker…' : 'Processing with AI…'}{' '}
                     <span style={{ color: '#f59e0b', fontWeight: 600 }}>{reprocessProgress.processed} / {reprocessProgress.total}</span>
                     {reprocessProgress.failed > 0 && (
                       <span style={{ color: 'var(--error-color)', marginLeft: '0.5rem' }}>({reprocessProgress.failed} failed)</span>
@@ -123,10 +76,29 @@ export function JobsTab({
                 ) : (
                   <span style={{ color: 'var(--text-primary)' }}>
                     <span style={{ color: '#f59e0b', fontWeight: 600 }}>{unprocessedJobs.length} job{unprocessedJobs.length !== 1 ? 's' : ''}</span>
-                    {' '}pending AI analysis — hidden from main list until processed
+                    {' '}awaiting analysis; failed jobs can be retried
+                    {failedAnalysisJobs.length > 0 && (
+                      <span style={{ color: 'var(--error-color)', marginLeft: '0.35rem' }}>
+                        ({failedAnalysisJobs.length} failed)
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
+              {failedAnalysisJobs.length > 0 && !reprocessTaskId && (
+                <ul className="failed-analysis-list" aria-label="Jobs whose analysis failed" style={{ listStyle: 'none', margin: '0.5rem 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {failedAnalysisJobs.slice(0, 5).map(job => (
+                    <li key={job.id} style={{ fontSize: '0.8rem', overflowWrap: 'anywhere' }}>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{job.title || 'Untitled posting'}</span>
+                      {job.company ? <span style={{ color: 'var(--text-secondary)' }}> · {job.company}</span> : null}
+                      <span style={{ color: 'var(--error-color)' }}> — analysis failed{job.analysis_error ? `: ${shortError(job.analysis_error)}` : ''}</span>
+                    </li>
+                  ))}
+                  {failedAnalysisJobs.length > 5 && (
+                    <li style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>…and {failedAnalysisJobs.length - 5} more (Show lists them all).</li>
+                  )}
+                </ul>
+              )}
               {reprocessTaskId && reprocessProgress && reprocessProgress.total > 0 && (
                   <AiTaskProgress
                   label="Job analysis (persists if you reload)"
@@ -136,9 +108,9 @@ export function JobsTab({
               )}
             </div>
             <div className="pending-analysis-banner-actions" style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              <button className="btn" onClick={handleStartReprocess} disabled={demo || !!reprocessTaskId}
+              <button className="btn" onClick={() => handleStartReprocess()} disabled={demo || !!reprocessTaskId}
                 style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', backgroundColor: reprocessTaskId ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.85)', color: reprocessTaskId ? '#f59e0b' : '#18181b', border: '1px solid rgba(245,158,11,0.4)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                {reprocessTaskId ? <><RefreshCw size={12} className="spinner" /> Processing…</> : <><RefreshCw size={12} /> Process Now</>}
+                {reprocessTaskId ? <><RefreshCw size={12} className="spinner" /> Processing…</> : <><RefreshCw size={12} /> {failedAnalysisJobs.length > 0 ? 'Retry / Process Now' : 'Process Now'}</>}
               </button>
               <button className="btn btn-secondary" onClick={() => setUnprocessedExpanded(v => !v)}
                 style={{ fontSize: '0.78rem', padding: '0.3rem 0.65rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -153,7 +125,7 @@ export function JobsTab({
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
-                    {['Title', 'Company', 'Source', 'Scraped'].map(h => (
+                    {['Title', 'Company', 'Source', 'Scraped', 'Analysis'].map(h => (
                       <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -165,6 +137,10 @@ export function JobsTab({
                       <td style={{ padding: '0.45rem 1rem', whiteSpace: 'nowrap' }}>{job.company || '—'}</td>
                       <td style={{ padding: '0.45rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{job.source || '—'}</td>
                       <td style={{ padding: '0.45rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{formatDateDisplay(job.date_scraped, '—')}</td>
+                      <td style={{ padding: '0.45rem 1rem', maxWidth: '320px', color: job.analysis_state === 'failed' ? 'var(--error-color)' : 'var(--text-secondary)' }}
+                        title={job.analysis_error || undefined}>
+                        {job.analysis_state === 'failed' ? `Failed${job.analysis_error ? `: ${shortError(job.analysis_error)}` : ''}` : 'Pending'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -174,552 +150,85 @@ export function JobsTab({
         </div>
       )}
 
-      {/* Filters card */}
-      <div className="card jobs-filter-card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
-        <div className="quick-views-row">
-          <span className="quick-views-label">Quick views</span>
-          <button className="quick-view-btn" onClick={() => applyView(quickViews.inbox)}>Inbox</button>
-          <button className="quick-view-btn" onClick={() => applyView(quickViews.highMatches)}>High matches</button>
-          <button className="quick-view-btn" onClick={() => applyView(quickViews.last7)}>Last 7 days</button>
-          <button className="quick-view-btn" onClick={() => applyView(quickViews.all)}>All jobs</button>
-          <details className="saved-views-menu" open={savedViewsOpen} onToggle={e => setSavedViewsOpen(e.currentTarget.open)}>
-            <summary className="quick-view-btn"><Save size={13} /> Saved views</summary>
-            <div className="saved-views-content">
-              <button className="btn btn-primary" onClick={() => { const name = window.prompt('Name this view'); if (name) saveCurrentView(name); }}>Save current view</button>
-              {savedViews.length === 0 ? <span className="saved-view-empty">No saved views yet.</span> : savedViews.map(view => (
-                <div key={view.name} className="saved-view-item">
-                  <button onClick={() => applyView(view)}>{view.name}</button>
-                  <button aria-label={`Delete saved view ${view.name}`} title="Delete saved view" onClick={() => deleteSavedView(view.name)}><X size={13} /></button>
-                </div>
-              ))}
-            </div>
-          </details>
-          <div className="view-mode-toggle" role="group" aria-label="View mode">
-            <button
-              type="button"
-              className={`view-mode-btn ${viewMode === 'cards' ? 'active' : ''}`}
-              onClick={() => setViewMode('cards')}
-              title="Cards view"
-              aria-pressed={viewMode === 'cards'}
-            >
-              <LayoutGrid size={13} />
-              <span>Cards</span>
-            </button>
-            <button
-              type="button"
-              className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
-              onClick={() => setViewMode('table')}
-              title="Table view"
-              aria-pressed={viewMode === 'table'}
-            >
-              <Table size={13} />
-              <span>Table</span>
-            </button>
-          </div>
-        </div>
-        <div className="jobs-search-row">
-          <input type="text" className="input-base jobs-search-input" placeholder="Search jobs, companies, skills..."
-            value={searchQuery} onChange={e => setSearchQuery(e.target.value)} aria-label="Search jobs, companies, and skills" />
-          <div className="jobs-search-actions">
-            <button
-              type="button"
-              className={`btn btn-secondary mobile-filter-toggle-btn ${mobileFiltersOpen ? 'active' : ''}`}
-              onClick={() => setMobileFiltersOpen(v => !v)}
-              aria-expanded={mobileFiltersOpen}
-            >
-              <SlidersHorizontal size={14} />
-              <span>{mobileFiltersOpen ? 'Hide filters' : 'Filters'}</span>
-              {activeFilters.length > 0 && <span className="filter-count-badge">{activeFilters.length}</span>}
-            </button>
-            <button className="btn btn-secondary clear-filters-btn" onClick={clearFilters} disabled={isDefaultFilterState}>
-              Clear filters
-            </button>
-          </div>
-        </div>
-        <div className={`job-filter-grid ${mobileFiltersOpen ? 'mobile-open' : ''}`}>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-german-level" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>German level</label>
-            <select id="filter-german-level" aria-label="Filter by German level" className="input-base" style={{ fontSize: '0.82rem', width: '100%', height: '34px' }} value={germanFilter} onChange={e => setGermanFilter(e.target.value)}>
-              <option value="All">All</option>
-              <option value="B1">B1 or below</option>
-              <option value="none">Not required</option>
-              <option value="A1">A1</option>
-              <option value="A2">A2</option>
-              <option value="B2">B2</option>
-              <option value="C1">C1</option>
-              <option value="C2">C2</option>
-              <option value="native">Native</option>
-              <option value="unknown">Unknown</option>
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-status" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>Status</label>
-            <select id="filter-status" aria-label="Filter by status" className="input-base" style={{ fontSize: '0.82rem', width: '100%', height: '34px' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="new">New</option>
-              <option value="active">Active (Unapplied)</option>
-              <option value="All">All statuses</option>
-              {STATUS_ORDER.filter(s => s !== 'new').map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-source" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>Source</label>
-            <select id="filter-source" aria-label="Filter by source" className="input-base" style={{ fontSize: '0.82rem', width: '100%', height: '34px' }} value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-              <option value="All">All</option>
-              {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-sort-by" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>Sort by</label>
-            <select id="filter-sort-by" aria-label="Sort jobs by" className="input-base" style={{ fontSize: '0.82rem', width: '100%', height: '34px' }} value={`${sortConfig.key}:${sortConfig.direction}`} onChange={e => { const [key, direction] = e.target.value.split(':'); setSortConfig({ key, direction }); }}>
-              <option value="match_score:desc">Match score (high first)</option>
-              <option value="date_scraped:desc">Scraped date (newest)</option>
-              <option value="date_scraped:asc">Scraped date (oldest)</option>
-              <option value="salary_yearly:desc">Salary (highest)</option>
-              <option value="title:asc">Title (A-Z)</option>
-              <option value="company:asc">Company (A-Z)</option>
-            </select>
-          </div>
-          <button className={`btn btn-secondary more-filters-btn ${moreFiltersOpen ? 'active' : ''}`} onClick={() => setMoreFiltersOpen(v => !v)} aria-expanded={moreFiltersOpen}>
-            <SlidersHorizontal size={14} /> {moreFiltersOpen ? 'Hide filters' : 'More filters'}
-          </button>
-        </div>
 
-        <div className={`job-secondary-filters ${moreFiltersOpen ? 'open' : ''}`}>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-timeframe" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>Timeframe / Scraped</label>
-            <select id="filter-timeframe" aria-label="Filter by timeframe or scrape date" className="input-base" style={{ fontSize: '0.82rem', width: '100%', height: '34px' }} value={scrapeDateFilter || '__recent21'} onChange={e => setScrapeDateFilter(e.target.value)}>
-              <option value="__recent21">Recent (≤21 days)</option>
-              <option value="__last7">Last 7 days</option>
-              <option value="__today">Today</option>
-              <option value="__last30">Last 30 days</option>
-              <option value="__all">All time</option>
-              {uniqueScrapeDates.length > 0 && (
-                <optgroup label="Specific scrape date">
-                  {uniqueScrapeDates.map(d => <option key={d} value={d}>{d === today ? `Today (${d})` : d}</option>)}
-                </optgroup>
-              )}
-            </select>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <label htmlFor="filter-min-score" className="form-label" style={{ fontSize: '0.7rem', marginBottom: '0.3rem' }}>Minimum score</label>
-            <input id="filter-min-score" aria-label="Minimum score" type="number" className="input-base" min="0" max="100" placeholder="0"
-              style={{ padding: '0.4rem 0.5rem', fontSize: '0.82rem', width: '100%', height: '34px' }}
-              value={minMatchFilter} onChange={e => setMinMatchFilter(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="active-filter-row" aria-label="Active filters">
-          <span className="active-filter-label">Showing</span>
-          {activeFilters.map(filter => (
-            <button key={filter.key} className="filter-chip" onClick={() => clearFilter(filter.key)} title={`Remove ${filter.label}`}>
-              {filter.label}<X size={12} aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-
-        {/* Batch & selection action bar */}
-        <div className="jobs-batch-bar">
-          <div className="jobs-batch-summary">
-            {batchGenProgress && batchGenProgress.total > 0 ? (
-              <div className="jobs-batch-generating">
-                <RefreshCw size={14} className="spinner" />
-                <span style={{ fontWeight: 600, color: 'var(--primary-light)' }}>Generating documents with AI…</span>
-                <AiTaskProgress
-                  label="CV & cover letters (persists if you reload)"
-                  processed={batchGenProgress.processed} total={batchGenProgress.total}
-                  failed={batchGenProgress.failed} accent="var(--primary-light)"
-                />
-              </div>
-            ) : batchGenSubmitting ? (
-              <span style={{ color: 'var(--text-secondary)' }}>Starting batch on server…</span>
-            ) : selectedCount > 0 ? (
-              <div className="jobs-selection-summary">
-                <span className="jobs-selection-count-badge">
-                  <strong>{selectedCount}</strong> selected
-                </span>
-                <button
-                  type="button"
-                  className="btn-clear-selection"
-                  onClick={() => setVisibleSelection(selectedJobs, false)}
-                  title="Deselect all jobs"
-                >
-                  <X size={12} />
-                  <span>Clear</span>
-                </button>
-                <span className="jobs-selection-scope-note">
-                  (of {filteredJobs.length} matching)
-                </span>
-              </div>
-            ) : (
-              <span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredJobs.length}</span> job{filteredJobs.length !== 1 ? 's' : ''} match filters
-                {(() => {
-                  const needDocs = filteredJobs.filter(j => !j.cv_url || !j.letter_url).length;
-                  return needDocs > 0
-                    ? <span> · <span style={{ color: 'var(--primary-light)', fontWeight: 600 }}>{needDocs}</span> need docs</span>
-                    : <span style={{ color: 'var(--success-color)', marginLeft: '0.3rem' }}>· all have docs ✓</span>
-                })()}
-              </span>
-            )}
-          </div>
-          <div className="jobs-batch-actions">
-            {/* Batch mark status */}
-            <div className="jobs-batch-mark-group">
-              <select
-                aria-label="Bulk mark status"
-                value={batchMarkStatus} onChange={e => setBatchMarkStatus(e.target.value)} disabled={batchMarkActive}
-                className="input-base batch-status-select"
-              >
-                {STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
-              </select>
-              <button
-                className="btn btn-secondary batch-mark-btn"
-                onClick={() => handleBatchMark(selectedCount > 0 ? selectedJobs : filteredJobs)}
-                disabled={demo || batchMarkActive || (selectedCount > 0 ? selectedJobs.length === 0 : filteredJobs.length === 0)}
-              >
-                {batchMarkActive ? <><RefreshCw size={12} className="spinner" /> Marking…</> : (selectedCount > 0 ? 'Mark Selected' : 'Mark All As')}
-              </button>
-            </div>
-            {(batchGenTaskId || batchGenSubmitting) && (
-              <button className="btn btn-secondary batch-cancel-btn" onClick={handleBatchGenerateCancel} disabled={demo || !batchGenTaskId}>
-                Cancel
-              </button>
-            )}
-            <button
-              className="btn batch-generate-btn"
-              onClick={() => handleBatchGenerate(selectedCount > 0 ? selectedJobs : undefined)}
-              disabled={demo ||
-                !!batchGenTaskId ||
-                batchGenSubmitting ||
-                (selectedCount > 0
-                  ? selectedJobs.length === 0
-                  : filteredJobs.filter(j => !j.cv_url || !j.letter_url).length === 0)
-              }
-              style={{
-                backgroundColor: (batchGenTaskId || batchGenSubmitting) ? 'color-mix(in srgb, var(--primary-color) 15%, transparent)' : 'var(--primary-color)',
-                color: (batchGenTaskId || batchGenSubmitting) ? 'var(--primary-color)' : 'var(--primary-text)',
-                border: '1px solid color-mix(in srgb, var(--primary-color) 40%, transparent)',
-                opacity: (selectedCount > 0 ? selectedJobs.length === 0 : filteredJobs.filter(j => !j.cv_url || !j.letter_url).length === 0) ? 0.4 : 1
-              }}
-            >
-              {(batchGenTaskId || batchGenSubmitting) ? (
-                <><RefreshCw size={12} className="spinner" /> Generating…</>
-              ) : selectedCount > 0 ? (
-                <><Wand2 size={12} /> Generate Selected Docs</>
-              ) : (
-                <><Wand2 size={12} /> Generate Docs for All Matching</>
-              )}
-            </button>
-            {selectedCount === 0 && (
-              <button className="btn btn-secondary batch-regen-btn" onClick={() => handleBatchGenerateForce()} disabled={demo || !!batchGenTaskId || batchGenSubmitting || filteredJobs.length === 0}
-                title="Regenerate documents for all matching jobs, even those that already have docs"
-                style={{ opacity: filteredJobs.length === 0 ? 0.4 : 1 }}>
-                <RefreshCw size={12} /> Regenerate All
-              </button>
-            )}
-          </div>
-        </div>
+    <div className="calm-jobs-toolbar">
+      <div className="jobs-stage-tabs" role="group" aria-label="Job stage">
+        {stageOptions.map(([value, label]) => <button key={value} className={statusFilter === value ? 'active' : ''} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)}>{label} <span>{jobs.filter(job => matchesStage(job, value)).length}</span></button>)}
       </div>
-
-      <div className={`table-container ${viewMode === 'cards' ? 'view-cards' : 'view-table'}`} data-view-mode={viewMode}>
-        {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            <RefreshCw className="spinner" size={32} style={{ margin: '0 auto 1rem', display: 'block' }} />
-            <p>Loading your database...</p>
-          </div>
-        ) : jobs.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-            <Briefcase size={48} style={{ margin: '0 auto 1rem', opacity: 0.5, display: 'block' }} />
-            <p>No jobs tracked yet. Start by scraping!</p>
-          </div>
-        ) : sortedJobs.length === 0 ? (
-          <div className="jobs-empty-filtered">
-            <SlidersHorizontal size={34} />
-            <h3>No jobs match these filters</h3>
-            <p>Try removing a filter or broaden the German level and date range.</p>
-            <button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
-          </div>
-        ) : (
-          <>
-            <div className="jobs-table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="th-col-select selection-column"><button className="table-checkbox" aria-label="Select all visible jobs" onClick={() => setVisibleSelection(sortedJobs, !(sortedJobs.length > 0 && sortedJobs.every(job => selectedJobIds.has(job.id))))}>{sortedJobs.length > 0 && sortedJobs.every(job => selectedJobIds.has(job.id)) ? <CheckSquare size={16} /> : <Square size={16} />}</button></th>
-                    <th className="th-col-title" onClick={() => handleSort('title')} style={{ cursor: 'pointer', userSelect: 'none' }}>Job Title {sortCol('title')}</th>
-                    <th className="th-col-company" onClick={() => handleSort('company')} style={{ cursor: 'pointer', userSelect: 'none' }}>Company {sortCol('company')}</th>
-                    <th className="th-col-match" onClick={() => handleSort('match_score')} style={{ cursor: 'pointer', userSelect: 'none' }}>Match {sortCol('match_score')}</th>
-                    <th className="th-col-german hide-on-mobile" onClick={() => handleSort('german_level')} style={{ cursor: 'pointer', userSelect: 'none' }}>German {sortCol('german_level')}</th>
-                    <th className="th-col-salary" onClick={() => handleSort('salary_yearly')} style={{ cursor: 'pointer', userSelect: 'none' }}>Salary {sortCol('salary_yearly')}</th>
-                    <th className="th-col-status" onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>Status {sortCol('status')}</th>
-                    <th className="th-col-scraped hide-on-mobile" onClick={() => handleSort('date_scraped')} style={{ cursor: 'pointer', userSelect: 'none' }}>Scraped {sortCol('date_scraped')}</th>
-                    <th className="th-col-source hide-on-mobile" onClick={() => handleSort('source')} style={{ cursor: 'pointer', userSelect: 'none' }}>Source {sortCol('source')}</th>
-                    <th className="th-col-actions" style={{ textAlign: 'center' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedJobs.map((job) => (
-                    <tr key={job.id}>
-                      <td className="td-col-select selection-column"><button className="table-checkbox" aria-label={`Select ${job.title}`} onClick={() => toggleSelectedJob(job.id)}>{selectedJobIds.has(job.id) ? <CheckSquare size={16} /> : <Square size={16} />}</button></td>
-                      <td className="td-col-title" style={{ fontWeight: 500, cursor: 'pointer' }}
-                        onClick={() => setSelectedJobDetails(job)} title={job.title}>
-                        <div className="table-job-title">
-                          {job.title}
-                        </div>
-                      </td>
-                      <td className="td-col-company" title={job.company}>
-                        <div className="table-job-company">
-                          {job.company}
-                        </div>
-                      </td>
-                      <td className="td-col-match">
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                          <span className={`badge ${getScoreBadgeClass(job.match_score)}`}>{job.match_score ? `${job.match_score}/100` : 'N/A'}</span>
-                          {(() => {
-                            const tier = getMatchTier(job);
-                            return tier ? (
-                              <span className={`table-tier-pill ${getTierBadgeClass(tier)}`}>
-                                {tier}
-                              </span>
-                            ) : null;
-                          })()}
-                        </div>
-                      </td>
-                      <td className="td-col-german hide-on-mobile">
-                        {(() => {
-                          const level = germanLevelLabel(job.german_level ?? job.requires_german);
-                          const germanColor =
-                            level === 'Not required'
-                              ? 'var(--text-secondary)'
-                              : level === 'B1' || level === 'A1' || level === 'A2'
-                              ? 'var(--primary-light, #818cf8)'
-                              : level === 'Unknown'
-                              ? 'var(--text-secondary)'
-                              : 'var(--danger-color)';
-                          return <span style={{ color: germanColor }}>{level}</span>;
-                        })()}
-                      </td>
-                      <td
-                        className="td-col-salary"
-                        style={{
-                          color: job.salary_yearly ? 'var(--warning-color)' : 'var(--text-secondary)',
-                          fontWeight: job.salary_yearly ? 600 : 400,
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={job.salary && job.salary !== "Not Specified" ? job.salary : undefined}
-                      >
-                        <div className="table-salary-val">
-                          {job.salary_yearly
-                            ? `€${Number(job.salary_yearly).toLocaleString('de-DE')}`
-                            : !job.salary || job.salary === "Not Specified"
-                            ? "—"
-                            : job.salary.length > 25
-                            ? `${job.salary.slice(0, 22)}...`
-                            : job.salary}
-                        </div>
-                      </td>
-                      <td className="td-col-status" style={{ whiteSpace: 'nowrap' }}>
-                        <StatusSelect value={job.status || (job.applied ? 'applied' : 'new')} onChange={(newStatus) => updateJobStatus(job.id, newStatus)} compact />
-                      </td>
-                      <td className="td-col-scraped hide-on-mobile" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                        <div>{formatDateDisplay(job.date_scraped, '-')}</div>
-                        {isJobStale(job) && (
-                          <span style={{ fontSize: '0.66rem', color: 'var(--text-muted, #94a3b8)', background: 'var(--bg-tag, rgba(255,255,255,0.06))', padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginTop: '2px', border: '1px solid var(--border-color, rgba(255,255,255,0.1))' }}>
-                            &gt;21d old
-                          </span>
-                        )}
-                      </td>
-                      <td className="td-col-source hide-on-mobile" style={{ whiteSpace: 'nowrap' }}>
-                        <span className="badge" style={{ backgroundColor: 'var(--surface-hover)', color: 'var(--text-muted, #a1a1aa)', border: '1px solid var(--border-color)' }}>
-                          {sourceLabel(job.source)}
-                        </span>
-                      </td>
-                      <td className="td-col-actions" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', gap: '0.2rem' }}>
-                            <button disabled={demo} className="btn btn-icon btn-table-action" aria-label="Edit job" title="Edit job" onClick={() => { setEditingJob(job); setEditTitle(job.title || ''); setEditCompany(job.company || ''); }}><Pencil size={14} /></button>
-                            {job.job_url && (
-                              <a href={job.job_url} target="_blank" rel="noreferrer" className="btn btn-icon btn-table-action" aria-label="Open original posting" title="Open original posting"><ExternalLink size={14} /></a>
-                            )}
-                            <button className="btn btn-icon btn-table-action" aria-label="Tailor documents" title="Tailor documents" onClick={() => setSelectedJobDetails({ ...job, initialTab: 'studio' })}><Wand2 size={14} style={{ color: 'var(--primary-color)' }} /></button>
-                            <button disabled={demo} className="btn btn-icon btn-table-action" aria-label="Delete job" title="Delete job" onClick={() => handleDeleteJob(job)}><Trash2 size={14} color="#ef4444" /></button>
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.2rem' }}>
-                            <button className="btn btn-icon btn-table-action" title="Generate CV in background" onClick={() => handleJobsGenerateCV(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-cv`)}>
-                              {generatingJobsDocs.has(`${job.id}-cv`) ? <RefreshCw size={14} className="spinner" /> : <FileText size={14} color="#3b82f6" />}
-                            </button>
-                            <button className="btn btn-icon btn-table-action" title="Generate Cover Letter in background" onClick={() => handleJobsGenerateLetter(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-letter`)}>
-                              {generatingJobsDocs.has(`${job.id}-letter`) ? <RefreshCw size={14} className="spinner" /> : <Mail size={14} color="#10b981" />}
-                            </button>
-                            <button className="btn btn-icon btn-table-action" title="Generate CV & Letter in background" onClick={() => handleJobsGenerateBoth(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-cv`) || generatingJobsDocs.has(`${job.id}-letter`)}>
-                              {(generatingJobsDocs.has(`${job.id}-cv`) && generatingJobsDocs.has(`${job.id}-letter`)) ? <RefreshCw size={14} className="spinner" /> : <Layers size={14} style={{ color: 'var(--primary-color)' }} />}
-                            </button>
-                            {job.cv_url ? (
-                              <a href={job.cv_url} target="_blank" rel="noreferrer" className="btn btn-icon btn-table-action btn-table-pill" title="Download CV" style={{ color: '#3b82f6', fontSize: '0.62rem', gap: '2px', display: 'flex', alignItems: 'center' }}>
-                                <Download size={13} /><span>CV</span>
-                              </a>
-                            ) : (
-                              <button className="btn btn-icon btn-table-action btn-table-pill" disabled title="CV not yet generated" style={{ opacity: 0.35, fontSize: '0.62rem', gap: '2px', display: 'flex', alignItems: 'center', cursor: 'not-allowed' }}>
-                                <Download size={13} /><span>CV</span>
-                              </button>
-                            )}
-                            {job.letter_url ? (
-                              <a href={job.letter_url} target="_blank" rel="noreferrer" className="btn btn-icon btn-table-action btn-table-pill" title="Download Cover Letter" style={{ color: '#10b981', fontSize: '0.62rem', gap: '2px', display: 'flex', alignItems: 'center' }}>
-                                <Download size={13} /><span>CL</span>
-                              </a>
-                            ) : (
-                              <button className="btn btn-icon btn-table-action btn-table-pill" disabled title="Cover Letter not yet generated" style={{ opacity: 0.35, fontSize: '0.62rem', gap: '2px', display: 'flex', alignItems: 'center', cursor: 'not-allowed' }}>
-                                <Download size={13} /><span>CL</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Job Cards View */}
-            <div className="jobs-cards-wrapper">
-              {paginatedJobs.map((job) => (
-                <div key={job.id} className="job-card">
-                  <div className="job-card-header">
-                    <button className="table-checkbox job-card-checkbox" aria-label={`Select ${job.title}`} onClick={() => toggleSelectedJob(job.id)}>
-                      {selectedJobIds.has(job.id) ? <CheckSquare size={18} /> : <Square size={18} />}
-                    </button>
-                    <div className="job-card-title-wrap" onClick={() => setSelectedJobDetails(job)}>
-                      <div className="job-card-title">{job.title}</div>
-                      <div className="job-card-company">{job.company}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                      <span className={`badge ${getScoreBadgeClass(job.match_score)} job-card-score`}>
-                        {job.match_score != null ? `${job.match_score}%` : 'N/A'}
-                      </span>
-                      {(() => {
-                        const tier = getMatchTier(job);
-                        return tier ? (
-                          <span className={`table-tier-pill ${getTierBadgeClass(tier)}`} style={{ fontSize: '0.62rem', padding: '0.1rem 0.35rem' }}>
-                            {tier}
-                          </span>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-
-                  <div className="job-card-meta">
-                    {(() => {
-                      const level = germanLevelLabel(job.german_level ?? job.requires_german);
-                      const tagClass =
-                        level === 'Not required'
-                          ? 'tag-german-none'
-                          : level === 'B1' || level === 'A1' || level === 'A2'
-                          ? 'tag-german-ok'
-                          : level === 'Unknown'
-                          ? 'tag-german-unknown'
-                          : 'tag-german-req';
-                      return (
-                        <span className={`job-card-tag ${tagClass}`}>
-                          DE: {level}
-                        </span>
-                      );
-                    })()}
-
-                    {(job.salary_yearly || (job.salary && job.salary !== "Not Specified")) && (
-                      <span className="job-card-tag tag-salary">
-                        {job.salary_yearly ? `€${Number(job.salary_yearly).toLocaleString('de-AT')}` : job.salary}
-                      </span>
-                    )}
-
-                    <span className="job-card-tag tag-source">
-                      {sourceLabel(job.source)}
-                    </span>
-
-                    {job.date_scraped && (
-                      <span className="job-card-date">
-                        {formatDateDisplay(job.date_scraped)}
-                        {isJobStale(job) && <span style={{ marginLeft: '4px', fontSize: '0.7rem', color: 'var(--text-muted, #94a3b8)', opacity: 0.85 }}>(&gt;21d)</span>}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="job-card-actions">
-                    <div className="job-card-status">
-                      <StatusSelect value={job.status || (job.applied ? 'applied' : 'new')} onChange={(newStatus) => updateJobStatus(job.id, newStatus)} compact />
-                    </div>
-                    <div className="job-card-buttons">
-                      <button disabled={demo} className="btn btn-icon" aria-label="Edit job" title="Edit job" onClick={() => { setEditingJob(job); setEditTitle(job.title || ''); setEditCompany(job.company || ''); }}>
-                        <Pencil size={15} />
-                      </button>
-                      {job.job_url && (
-                        <a href={job.job_url} target="_blank" rel="noreferrer" className="btn btn-icon" aria-label="Open original posting" title="Open original posting">
-                          <ExternalLink size={15} />
-                        </a>
-                      )}
-                      <button className="btn btn-icon" aria-label="Tailor documents" title="Tailor documents" onClick={() => setSelectedJobDetails({ ...job, initialTab: 'studio' })}>
-                        <Wand2 size={15} style={{ color: 'var(--primary-color)' }} />
-                      </button>
-                      <button disabled={demo} className="btn btn-icon" aria-label="Delete job" title="Delete job" onClick={() => handleDeleteJob(job)}>
-                        <Trash2 size={15} color="#ef4444" />
-                      </button>
-                      <button className="btn btn-icon" title="Generate CV" onClick={() => handleJobsGenerateCV(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-cv`)}>
-                        {generatingJobsDocs.has(`${job.id}-cv`) ? <RefreshCw size={14} className="spinner" /> : <FileText size={14} color="#3b82f6" />}
-                      </button>
-                      <button className="btn btn-icon" title="Generate Cover Letter" onClick={() => handleJobsGenerateLetter(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-letter`)}>
-                        {generatingJobsDocs.has(`${job.id}-letter`) ? <RefreshCw size={14} className="spinner" /> : <Mail size={14} color="#10b981" />}
-                      </button>
-                      <button className="btn btn-icon" title="Generate CV & Letter" onClick={() => handleJobsGenerateBoth(job)} disabled={demo || generatingJobsDocs.has(`${job.id}-cv`) || generatingJobsDocs.has(`${job.id}-letter`)}>
-                        {(generatingJobsDocs.has(`${job.id}-cv`) && generatingJobsDocs.has(`${job.id}-letter`)) ? <RefreshCw size={14} className="spinner" /> : <Layers size={14} style={{ color: 'var(--primary-color)' }} />}
-                      </button>
-                      {job.cv_url ? (
-                        <a href={job.cv_url} target="_blank" rel="noreferrer" className="btn btn-icon" aria-label="Download CV" title="Download CV" style={{ color: '#3b82f6', fontSize: '0.65rem', gap: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Download size={14} /><span>CV</span>
-                        </a>
-                      ) : (
-                        <button className="btn btn-icon" disabled aria-label="CV not yet generated" title="CV not yet generated" style={{ opacity: 0.35, fontSize: '0.65rem', gap: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'not-allowed' }}>
-                          <Download size={14} /><span>CV</span>
-                        </button>
-                      )}
-                      {job.letter_url ? (
-                        <a href={job.letter_url} target="_blank" rel="noreferrer" className="btn btn-icon" aria-label="Download Cover Letter" title="Download Cover Letter" style={{ color: '#10b981', fontSize: '0.65rem', gap: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Download size={14} /><span>CL</span>
-                        </a>
-                      ) : (
-                        <button className="btn btn-icon" disabled aria-label="Cover Letter not yet generated" title="Cover Letter not yet generated" style={{ opacity: 0.35, fontSize: '0.65rem', gap: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'not-allowed' }}>
-                          <Download size={14} /><span>CL</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {sortedJobs.length > 0 && (
-              <div className="jobs-pagination-bar">
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Showing {Math.min((currentPage - 1) * itemsPerPage + 1, sortedJobs.length)} to {Math.min(currentPage * itemsPerPage, sortedJobs.length)} of {sortedJobs.length} jobs
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select aria-label="Jobs per page" className="input-base" style={{ fontSize: '0.85rem', marginRight: '1rem', backgroundColor: 'var(--bg-color)', height: '32px' }}
-                    value={itemsPerPage} onChange={e => { setItemsPerPage(parseInt(e.target.value)); setCurrentPage(1); }}>
-                    <option value={10}>10 per page</option>
-                    <option value={25}>25 per page</option>
-                    <option value={50}>50 per page</option>
-                    <option value={100}>100 per page</option>
-                  </select>
-                  <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
-                    disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>Previous</button>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0.5rem' }}>Page {currentPage} of {totalPages}</div>
-                  <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
-                    disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>Next</button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+      <div className="calm-jobs-search"><input className="input-base" aria-label="Search jobs" placeholder="Search title, company or skill" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        <button className="btn btn-secondary" aria-expanded={filtersOpen} aria-controls="jobs-filter-panel" onClick={() => setFiltersOpen(value => !value)}>Filter</button>
       </div>
-    </>
-  );
+    </div>
+    {filtersOpen && <section id="jobs-filter-panel" className="calm-filter-panel" aria-label="Job filters">
+      <label>German level<select aria-label="German level" className="input-base" value={germanFilter} onChange={e => setGermanFilter(e.target.value)}>{['All', 'none', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'unknown'].map(level => <option key={level} value={level}>{level === 'All' ? 'Any level' : level === 'B1' ? 'B1 or below' : germanLevelLabel(level)}</option>)}</select></label>
+      <label>Status<select aria-label="Status" className="input-base" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="All">Any status</option><option value="pipeline">Applied pipeline</option>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+      <label>Source<select aria-label="Source" className="input-base" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}><option value="All">Any source</option>{uniqueSources.map(source => <option key={source} value={source}>{sourceLabel(source)}</option>)}</select></label>
+      <label>Found<select aria-label="Found" className="input-base" value={scrapeDateFilter} onChange={e => setScrapeDateFilter(e.target.value)}>{[['__all', 'Any date'], ['__today', 'Today'], ['__last7', 'Last 7 days (keeps pipeline)'], ['__recent21', 'Last 21 days (keeps pipeline)'], ['__last30', 'Last 30 days (keeps pipeline)']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}{uniqueScrapeDates.map(date => <option key={date} value={date}>{formatDateDisplay(date)}</option>)}</select></label>
+      <label>Minimum rating<select aria-label="Minimum rating" className="input-base" value={minimumRating} onChange={e => setMinimumRating(e.target.value)}><option value="">Any rating, including unrated</option>{RATINGS.slice(0, -1).map(rating => <option key={rating} value={rating}>{rating} or better</option>)}</select></label>
+      <label>Sort within rating<select aria-label="Sort within rating" className="input-base" value={`${sortConfig.key}:${sortConfig.direction}`} onChange={e => { const [key, direction] = e.target.value.split(':'); setSortConfig({ key, direction }); }}><option value="match_rating:desc">Best fit first</option><option value="date_scraped:desc">Newest first</option><option value="salary_yearly:desc">Highest salary first</option><option value="title:asc">Title A–Z</option><option value="company:asc">Company A–Z</option></select></label>
+      <details className="calm-saved-views"><summary>Saved views</summary><button className="btn btn-secondary" onClick={() => { const name = window.prompt('Name this view'); if (name) saveCurrentView(name); }}>Save current view</button>{savedViews.map(view => <div key={view.name}><button onClick={() => applyView(view)}>{view.name}</button><button aria-label={`Delete saved view ${view.name}`} onClick={() => deleteSavedView(view.name)}><X size={14} /></button></div>)}</details>
+      <button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
+    </section>}
+    <div className="calm-filter-labels">{activeFilters.map(filter => <button className="calm-filter-label" key={filter.key} onClick={() => clearFilter(filter.key)} aria-label={`Remove ${filter.label}`}>{filter.label} <X size={12} /></button>)}</div>
+    {selectedCount > 0 && <div className="calm-batch-bar" aria-label="Selected jobs">
+      <span>{selectedCount} selected</span>
+      <button className="btn btn-secondary" onClick={() => setVisibleSelection(selectedJobs, false)}>Clear selection</button>
+      <button className="btn btn-secondary" onClick={() => setVisibleSelection(paginatedJobs, true)}>Select this page</button>
+      <label>Mark as <select className="input-base" value={batchMarkStatus} onChange={e => setBatchMarkStatus(e.target.value)}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+      <button className="btn btn-secondary" disabled={demo || batchMarkActive} onClick={() => handleBatchMark(selectedJobs)}>Mark selected</button>
+      <button className="btn btn-primary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerate(selectedJobs)}>Generate documents</button>
+      <button className="btn btn-secondary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerateForce(selectedJobs)}>Regenerate documents</button>
+    </div>}
+    {(batchGenTaskId || batchGenSubmitting) && <div className="calm-operation-status" role="status"><span>Document generation {batchGenProgress?.stage === 'cancelling' ? 'stopping after running calls finish' : batchGenProgress?.status || 'starting'} · {batchGenProgress?.processed || 0} / {batchGenProgress?.total || 0} · {batchGenProgress?.failed || 0} failed</span><button className="btn btn-secondary" disabled={demo || !batchGenTaskId} onClick={handleBatchGenerateCancel}>Cancel generation</button></div>}
+    {reprocessTaskId && !unprocessedJobs.length && <p role="status">Rating {reprocessProgress?.status || 'in progress'} · {reprocessProgress?.processed || 0} / {reprocessProgress?.total || 0}</p>}
+    {loading ? <p role="status">Loading jobs…</p> : !jobs.length ? <p>No jobs tracked yet. Add a posting to get started.</p> : !sortedJobs.length ? <div className="jobs-empty-filtered"><h3>No jobs match these filters</h3><button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button></div> : <>
+      <div className="jobs-rating-groups">
+        {RATING_GROUPS.map(group => {
+          const groupJobs = paginatedJobs.filter(job => ratingLabel(job) === group);
+          if (!groupJobs.length) return null;
+          const collapsible = group === 'Poor' || group === 'Blocked';
+          const open = !collapsible || expandedGroups[group];
+          return <section key={group} className={`jobs-rating-group ${collapsible ? 'quiet-group' : ''}`} aria-label={`${group} jobs`}>
+            <div className="rating-group-heading"><h3>{collapsible ? <button aria-expanded={open} onClick={() => setExpandedGroups(prev => ({ ...prev, [group]: !open }))}><ChevronDown size={16} style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />{group} <span>{groupJobs.length}</span></button> : <>{group} <span>{groupJobs.length}</span></>}</h3><p>{RATING_DEFINITIONS[group]}{['Great', 'Good', 'Decent', 'Stretch'].includes(group) && ' Soft preference conflicts can lower the result.'}</p></div>
+            {open && groupJobs.map(job => {
+              const openJob = () => setSelectedJobDetails(job);
+              const busyCV = generatingJobsDocs.has(`${job.id}-cv`), busyLetter = generatingJobsDocs.has(`${job.id}-letter`);
+              const docs = job.cv_url && job.letter_url ? 'CV and letter ready' : job.cv_url ? 'CV ready' : job.letter_url ? 'Letter ready' : 'No documents yet';
+              const actionsOpen = openActions === job.id;
+              return <article key={job.id} className={`calm-job-row ${selectedJobIds.has(job.id) ? 'selected' : ''}`} tabIndex={0} role="link" aria-label={`Open ${job.title} at ${job.company}`} onClick={openJob} onKeyDown={event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openJob(); } }}>
+                <input type="checkbox" aria-label={`Select ${job.title}`} checked={selectedJobIds.has(job.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelectedJob(job.id)} />
+                <div className="calm-job-main"><div className="calm-job-title">{job.title}</div><div className="calm-job-meta"><span className="calm-job-company">{job.company}</span>{job.location && ` · ${job.location}`}{job.work_model && ` · ${job.work_model}`}</div>
+                  <div className="calm-job-facts">German: {germanLevelLabel(job.german_level ?? job.requires_german)} · {job.salary_yearly ? `€${Number(job.salary_yearly).toLocaleString('de-AT')} a year` : job.salary && job.salary !== 'Not Specified' ? job.salary : 'Salary not stated'} · {sourceLabel(job.source)}</div>
+                  <p className="calm-job-evidence">{ratingSummary(job)}</p>
+                </div>
+                <div className="calm-job-rating"><MatchRating job={job} /></div>
+                <div className="calm-job-state"><span>{STATUS_CONFIG[jobStatus(job)]?.label || jobStatus(job)}</span><div>{formatDateDisplay(job.date_scraped, 'Date unknown')}</div><span className={job.cv_url || job.letter_url ? 'docs-ready' : ''}>{busyCV || busyLetter ? 'Generating documents…' : docs}</span></div>
+                <div className="calm-job-actions" onClick={e => e.stopPropagation()}>
+                  <button type="button" className="btn btn-icon" aria-label={`Actions for ${job.title}`} aria-expanded={actionsOpen} aria-controls={`job-actions-${job.id}`} onClick={e => { triggerRef.current = e.currentTarget; setOpenActions(actionsOpen ? null : job.id); }}><MoreHorizontal size={19} /></button>
+                  {actionsOpen && <div id={`job-actions-${job.id}`} ref={actionsRef} className="calm-row-menu" role="group" aria-label={`Actions for ${job.title}`}>
+                    {menuAction('Open job', openJob)}
+                    {job.job_url && <a href={job.job_url} target="_blank" rel="noreferrer">Open original posting</a>}
+                    {job.cv_url && <a href={job.cv_url} target="_blank" rel="noreferrer">Download CV</a>}
+                    {job.letter_url && <a href={job.letter_url} target="_blank" rel="noreferrer">Download letter</a>}
+                    <label>Change status<select className="input-base" aria-label={`Status for ${job.title}`} disabled={demo} value={jobStatus(job)} onChange={e => closeAnd(() => updateJobStatus(job.id, e.target.value))}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+                    {menuAction('Tailor documents', () => setSelectedJobDetails({ ...job, initialTab: 'studio' }))}
+                    {menuAction('Generate CV', () => handleJobsGenerateCV(job), demo || busyCV)}
+                    {menuAction('Generate letter', () => handleJobsGenerateLetter(job), demo || busyLetter)}
+                    {menuAction('Generate CV and letter', () => handleJobsGenerateBoth(job), demo || busyCV || busyLetter)}
+                    {menuAction(['Needs re-rating', 'Unrated'].includes(group) ? 'Re-rate' : 'Rate again', () => handleStartReprocess(job.id), demo || !!reprocessTaskId)}
+                    {menuAction('Edit job', () => { setEditingJob(job); setEditTitle(job.title || ''); setEditCompany(job.company || ''); }, demo)}
+                    {menuAction('Delete job', () => handleDeleteJob(job), demo)}
+                  </div>}
+                </div>
+              </article>;
+            })}
+          </section>;
+        })}
+      </div>
+      <div className="jobs-pagination-bar"><span>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, sortedJobs.length)}–{Math.min(currentPage * itemsPerPage, sortedJobs.length)} of {sortedJobs.length} jobs</span><div>
+        <select aria-label="Jobs per page" className="input-base" value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}>{[10, 25, 50, 100].map(size => <option key={size} value={size}>{size} per page</option>)}</select>
+        <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage(page => page - 1)}>Previous</button><span>Page {currentPage} of {totalPages}</span><button className="btn btn-secondary" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(page => page + 1)}>Next</button>
+      </div></div>
+    </>}
+  </div>;
 }

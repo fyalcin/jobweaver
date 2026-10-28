@@ -10,6 +10,9 @@ import shutil
 from typing import Optional, Tuple
 
 import demo_mode
+import model_transport
+from operation_budget import operation, check, current, OperationTerminated, OperationBusy
+from compiler_sandbox import run_tool
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,7 @@ def _routing(model_name: str, response_format: Optional[dict]) -> tuple[str, dic
 MAX_OUTPUT_TOKENS = 8000
 
 
+@operation()
 def openrouter_api(prompt: str, model_name: str, label: str = "openrouter",
                    response_format: Optional[dict] = None) -> str:
     import requests
@@ -81,18 +85,20 @@ def openrouter_api(prompt: str, model_name: str, label: str = "openrouter",
         payload["provider"] = provider
     if response_format:
         payload["response_format"] = response_format
-    resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=300)
+    resp = model_transport.post_json("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=300,
+                                     label=label)
     if response_format and resp.status_code in (404, 429):
         # No allowed provider offers structured output right now (404: none
         # allowed by the account's provider settings; 429: the ones that do are
-        # overloaded). A refused request costs nothing, so ask once without the
-        # schema; the caller's own validation still applies.
+        # overloaded). Ask once without the schema within the same attempt budget;
+        # the caller's own validation still applies and billing may be unknown.
         logger.warning(f"[{label}] Structured output unavailable ({resp.status_code}); retrying without schema")
         payload.pop("response_format")
         payload["provider"].pop("require_parameters")
         if not payload["provider"]:
             payload.pop("provider")
-        resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=300)
+        resp = model_transport.post_json("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=300,
+                                         label=label)
     if not resp.ok:
         err_msg = ""
         try:
@@ -100,6 +106,7 @@ def openrouter_api(prompt: str, model_name: str, label: str = "openrouter",
         except Exception:
             pass
         if err_msg:
+            err_msg = _redact_endpoint_error(err_msg, "https://openrouter.ai/api/v1/chat/completions", headers)
             raise RuntimeError(f"OpenRouter error ({resp.status_code}): {err_msg}")
         resp.raise_for_status()
     data = resp.json()
@@ -159,19 +166,32 @@ def _custom_headers() -> dict:
     return headers
 
 
+def _redact_endpoint_error(text, url, headers):
+    """Provider error bodies can echo endpoint credentials; keep useful short errors."""
+    from urllib.parse import urlsplit, parse_qsl
+    parsed = urlsplit(url)
+    secrets = [url, parsed.username, parsed.password, *(value for _, value in parse_qsl(parsed.query))]
+    authorization = headers.get('Authorization', '')
+    secrets += [authorization, authorization.removeprefix('Bearer ')]
+    for value in sorted((value for value in secrets if value), key=len, reverse=True):
+        text = text.replace(value, '[redacted]')
+    return text[:300]
+
+
 def _error_text(resp) -> str:
     try:
         data = resp.json()
     except Exception:
-        return (getattr(resp, "text", "") or "")[:300]
+        return getattr(resp, "text", "") or ""
     error = data.get("error") if isinstance(data, dict) else None
     if isinstance(error, dict):
         return str(error.get("message") or error)
     if error:
         return str(error)
-    return str(data.get("message") or data)[:300] if isinstance(data, dict) else str(data)[:300]
+    return str(data.get("message") or data) if isinstance(data, dict) else str(data)
 
 
+@operation()
 def custom_model_api(prompt: str, model_name: str, label: str = "custom",
                      response_format: Optional[dict] = None) -> str:
     """One chat completion from the endpoint in CUSTOM_MODEL_BASE_URL (for example http://localhost:11434/v1).
@@ -189,10 +209,11 @@ def custom_model_api(prompt: str, model_name: str, label: str = "custom",
     payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": MAX_OUTPUT_TOKENS}
     if response_format:
         payload["response_format"] = response_format
-    logger.info(f"[{label}] Calling custom endpoint {base} with model {model}...")
+    logger.info(f"[{label}] Calling configured custom endpoint with model {model}...")
     t0 = time.time()
     for _ in range(3):  # at most two adjustments, each made once
-        resp = requests.post(base + "/chat/completions", headers=_custom_headers(), json=payload, timeout=300)
+        resp = model_transport.post_json(base + "/chat/completions", headers=_custom_headers(), json=payload, timeout=300,
+                                         label=label)
         if resp.status_code not in (400, 422):
             break
         message = _error_text(resp).lower()
@@ -205,7 +226,8 @@ def custom_model_api(prompt: str, model_name: str, label: str = "custom",
         else:
             break
     if not resp.ok:
-        error = RuntimeError(f"Custom model endpoint error ({resp.status_code}): {_error_text(resp)}")
+        message = _redact_endpoint_error(_error_text(resp), base, _custom_headers())
+        error = RuntimeError(f"Custom model endpoint error ({resp.status_code}): {message}")
         error.response = resp  # run_ai_prompt does not retry client errors
         raise error
     choice = (resp.json().get("choices") or [{}])[0]
@@ -231,7 +253,7 @@ def list_custom_models() -> list[dict]:
         resp.raise_for_status()
         entries = resp.json().get("data") or []
     except Exception as exc:
-        logger.warning(f"Custom endpoint {base} lists no models: {type(exc).__name__}: {exc}")
+        logger.warning("Configured custom endpoint lists no models (%s)", type(exc).__name__)
         return []
     return [{"id": CUSTOM_PREFIX + str(m["id"]), "name": f"Custom endpoint: {m['id']}", "context_length": None}
             for m in entries if isinstance(m, dict) and m.get("id")]
@@ -274,6 +296,7 @@ def resolve_document_model(config: Optional[dict]) -> str:
     return apply_route_cheapest(model, bool(cfg.get("route_cheapest", False)))
 
 
+@operation()
 def run_ai_prompt(
     prompt: str,
     max_retries: int = 3,
@@ -285,6 +308,7 @@ def run_ai_prompt(
     demo_mode.refuse_if_enabled()
     delay = 2.0
     for attempt in range(max_retries):
+        check()
         try:
             if is_custom_model(model_name):
                 return custom_model_api(prompt, model_name, label, response_format=response_format)
@@ -292,7 +316,7 @@ def run_ai_prompt(
                 return openrouter_api(prompt, model_name or "z-ai/glm-5.3-flash", label,
                                       response_format=response_format)
             return openrouter_api(prompt, model_name or "z-ai/glm-5.3-flash", label)
-        except AIContentFilterError:
+        except (AIContentFilterError, OperationTerminated):
             raise
         except Exception as e:
             response = getattr(e, 'response', None)
@@ -302,19 +326,20 @@ def run_ai_prompt(
             if attempt < max_retries - 1:
                 wait = delay + random.uniform(0, delay * 0.25)
                 logger.warning(f"[{label}] API call failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {wait:.1f}s…")
-                time.sleep(wait)
+                current().wait(wait)
                 delay *= 2
             else:
                 logger.error(f"[{label}] API call failed after {max_retries} attempts.")
                 raise
 
 
+@operation()
 def research_company_sonar(
     company: str,
     role_title: str = "",
     description: str = "",
     model_name: str = "perplexity/sonar",
-    label: str = "sonar-research"
+    label: str = "Company research"
 ) -> str:
     """
     Conduct live web-grounded company research via Perplexity Sonar on OpenRouter.
@@ -404,10 +429,11 @@ def write_latex(folder, filename, content):
         logger.error(f"Failed to write {filepath}: {e}")
         return None
 
+@operation()
 def _compile_fresh(folder, filename, output_filename, output_dir, engine, resource_dir=None):
     """Build in a fresh workspace; preserve source, logs and last-good PDF.
 
-    This bounds execution but is NOT an OS sandbox (household deployment).
+    Only explicit input files and public tool resources enter the native sandbox.
     """
     from pathlib import Path
     from document_artifacts import atomic_write, record_build, BUILD_TIMEOUT
@@ -421,7 +447,7 @@ def _compile_fresh(folder, filename, output_filename, output_dir, engine, resour
         for directory in (resource_dir, folder):
             if directory and Path(directory).is_dir():
                 for item in Path(directory).iterdir():
-                    if item.is_file() and item.suffix.lower() in ('.tex', '.typ', '.sty', '.cls', '.png', '.jpg', '.otf', '.ttf'):
+                    if not item.is_symlink() and item.is_file() and item.suffix.lower() in ('.tex', '.typ', '.sty', '.cls', '.png', '.jpg', '.otf', '.ttf'):
                         shutil.copy2(item, build / item.name)
         input_path = build / Path(filename).name
         input_path.write_text(source, encoding="utf-8")
@@ -439,16 +465,16 @@ def _compile_fresh(folder, filename, output_filename, output_dir, engine, resour
                        '--package-path', str(packages), '--package-cache-path', str(packages),
                        '--font-path', str(Path(_ROOT, 'webapp/public/typst/fonts')),
                        '--creation-timestamp', '0', str(input_path), str(pdf)]
-        env = {k: v for k, v in os.environ.items() if not any(x in k.upper() for x in ('API_KEY', 'TOKEN', 'SECRET', 'PASSWORD'))}
         try:
-            result = subprocess.run(command, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    timeout=BUILD_TIMEOUT, env=env)
+            result = run_tool(command, build, assets=Path(_ROOT, 'webapp/public/typst') if engine == 'typst' else None,
+                              timeout=BUILD_TIMEOUT)
             log = (_decode_process_output(result.stdout) + '\n' + _decode_process_output(result.stderr)).strip()
             atomic_write(target / (name + '.build.log'), log)
             if result.returncode != 0:
                 return False, log or f'{engine} compilation failed (exit {result.returncode})'
             # Validation occurs before promotion; stale PDFs never enter the workspace.
             record = record_build(pdf, source, engine)
+            check()
             atomic_write(target / (name + '.pdf'), pdf.read_bytes())
             atomic_write(target / (name + '.pdf.build.json'), json.dumps(record))
             atomic_write(target / (name + '.pdf.attempt.json'), json.dumps({'success': True, 'source_hash': record['source_hash']}))
@@ -478,6 +504,7 @@ def compile_studio_document(doc_dir):
     filename = "document.typ" if os.path.exists(os.path.join(doc_dir, "document.typ")) else "document.tex"
     return compile_typst(doc_dir, filename, "document.pdf", doc_dir, True) if filename.endswith('.typ') else compile_latex(doc_dir, filename, "document.pdf", doc_dir)
 
+@operation()
 def compile_latex_diff(folder, old_filename, new_filename, output_filename, output_dir="drafts", resource_dir=None):
     """Create and compile a diff in scratch space without writing templates."""
     from pathlib import Path
@@ -486,8 +513,7 @@ def compile_latex_diff(folder, old_filename, new_filename, output_filename, outp
         for name in (old_filename, new_filename):
             shutil.copy2(Path(folder, name), build / name)
         try:
-            result = subprocess.run(['latexdiff', old_filename, new_filename], cwd=build,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+            result = run_tool(['latexdiff', old_filename, new_filename], build, timeout=45)
             if result.returncode != 0:
                 return False, 'latexdiff failed: ' + _decode_process_output(result.stderr)
             (build / 'diff.tex').write_bytes(result.stdout)
@@ -496,6 +522,7 @@ def compile_latex_diff(folder, old_filename, new_filename, output_filename, outp
             return False, f'Diff failed: {exc}'
 
 
+@operation()
 def convert_pdf_to_images(pdf_filepath: str, output_dir: str, prefix: str):
     """Render fresh pages; never combine a new PDF with old preview pages."""
     from pathlib import Path
@@ -504,9 +531,10 @@ def convert_pdf_to_images(pdf_filepath: str, output_dir: str, prefix: str):
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='document-preview-') as temp:
         try:
-            result = subprocess.run(['pdftoppm', '-png', '-rx', '150', '-ry', '150',
-                                     str(Path(pdf_filepath).resolve()), prefix], cwd=temp,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+            if Path(prefix).name != prefix:
+                raise ValueError('Invalid preview filename')
+            shutil.copy2(pdf_filepath, Path(temp, 'input.pdf'))
+            result = run_tool(['pdftoppm', '-png', '-rx', '150', '-ry', '150', 'input.pdf', prefix], temp, timeout=45)
             if result.returncode != 0:
                 logger.error('Preview failed: %s', _decode_process_output(result.stderr))
                 return []
@@ -521,6 +549,10 @@ def convert_pdf_to_images(pdf_filepath: str, output_dir: str, prefix: str):
                 if old.name not in names:
                     old.unlink()
             return [image.name for image in images]
+        except OperationBusy as exc:
+            # The PDF already exists; an optional preview must not fail it. Cancel/deadline stay terminal.
+            logger.warning('Preview skipped: %s', exc)
+            return []
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             logger.error('Preview failed: %s', exc)
             return []
@@ -620,11 +652,13 @@ def parse_typst_error(log_content: str) -> dict:
     }
 
 
+@operation()
 def ai_surgical_edit_typst(typst_code, instruction, selection=None, model_name="z-ai/glm-5.3-flash", user=None):
     from reviewed_documents import grounded_edit
     return grounded_edit(typst_code, instruction, user, model_name, run_ai_prompt)
 
 
+@operation()
 def ai_surgical_edit_latex(tex_code, instruction, selection=None, model_name="z-ai/glm-5.3-flash", user=None):
     from reviewed_documents import grounded_edit
     return grounded_edit(tex_code, instruction, user, model_name, run_ai_prompt)
@@ -639,6 +673,7 @@ STRICT INSTRUCTION (German documents): Schreibe natürliches, menschliches Deuts
 - Schreibe wie eine reale Bewerberin oder ein realer Bewerber: klar, konkret, mit echten Beispielen — kein Marketing-Prospekt, keine Betroffenheitsfloskeln."""
 
 
+@operation()
 def refine_document_with_feedback(current_tex, feedback, model_name="z-ai/glm-5.3-flash", tone="", user=None):
     from reviewed_documents import grounded_edit
     return grounded_edit(current_tex, feedback, user, model_name, run_ai_prompt)

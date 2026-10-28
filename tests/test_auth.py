@@ -1,8 +1,12 @@
 import os
 import time
 import unittest
+from unittest.mock import patch
+import tempfile
+from pathlib import Path
 
 import auth
+import db
 
 
 class TestPasswordHashing(unittest.TestCase):
@@ -30,29 +34,31 @@ class TestPasswordHashing(unittest.TestCase):
 
 
 class TestSessionTokens(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        previous = db.DB_PATH
+        db.set_db_path(str(Path(temp.name, 'sessions.db')))
+        self.addCleanup(db.set_db_path, previous)
+        db.init_db()
+        self.user_id = db.get_user_by_username('admin')['id']
+
     def test_roundtrip(self):
-        token = auth.create_session_token(42)
-        self.assertEqual(auth.verify_session_token(token), 42)
+        token = auth.create_session_token(self.user_id)
+        self.assertEqual(auth.verify_session_token(token), self.user_id)
 
     def test_tampered_token_fails(self):
-        token = auth.create_session_token(42)
-        user_id, expires, sig = token.split(".")
-        forged_sig = ("0" * len(sig)) if set(sig) != {"0"} else ("1" * len(sig))
-        self.assertIsNone(auth.verify_session_token(f"{user_id}.{expires}.{forged_sig}"))
+        token = auth.create_session_token(self.user_id)
+        forged = ('x' if token[0] != 'x' else 'y') + token[1:]
+        self.assertIsNone(auth.verify_session_token(forged))
 
     def test_modified_user_id_fails(self):
-        token = auth.create_session_token(42)
-        _, expires, sig = token.split(".")
-        # Signature no longer matches the altered payload
-        self.assertIsNone(auth.verify_session_token(f"43.{expires}.{sig}"))
+        self.assertIsNone(auth.verify_session_token('43.9999999999.' + '0' * 64))
 
     def test_expired_token_fails(self):
-        expires = int(time.time()) - 10
-        import hmac
-        import hashlib
-        payload = f"7.{expires}"
-        sig = hmac.new(auth._load_secret(), payload.encode(), hashlib.sha256).hexdigest()
-        self.assertIsNone(auth.verify_session_token(f"{payload}.{sig}"))
+        token = auth.create_session_token(self.user_id)
+        with patch('auth.time.time', return_value=time.time() + auth.SESSION_TTL_SECONDS + 1):
+            self.assertIsNone(auth.verify_session_token(token))
 
     def test_garbage_tokens_fail(self):
         self.assertIsNone(auth.verify_session_token(None))

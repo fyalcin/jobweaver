@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { api } from '../api/client';
+import { useApi } from '../api/context';
 import { compileTypstClient, uint8ArrayToBase64, downloadPdfBlob } from '../services/typstWorkerClient';
 
 export function useStudio({ user, activeTab, addToast }) {
+  const api = useApi();
   const [documents, setDocuments] = useState([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [templates, setTemplates] = useState([]);
@@ -24,6 +25,18 @@ export function useStudio({ user, activeTab, addToast }) {
   const autosaveInFlightRef = useRef(false);
   const autosavePendingRef = useRef(null);
   const [autosaveTick, setAutosaveTick] = useState(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      activeIdRef.current = null;
+      loadSequenceRef.current += 1;
+      autosavePendingRef.current = null;
+      clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
 
   const isDirty = activeDoc ? draftContent !== activeDoc.content : false;
 
@@ -41,7 +54,7 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       setLoadingDocs(false);
     }
-  }, [user?.username, addToast]);
+  }, [user?.username, api, addToast]);
 
   const fetchTemplates = useCallback(async () => {
     if (!user?.username) return [];
@@ -53,9 +66,10 @@ export function useStudio({ user, activeTab, addToast }) {
     } catch {
       return [];
     }
-  }, [user?.username]);
+  }, [api, user?.username]);
 
   const selectDocument = useCallback(async (id) => {
+    if (!mountedRef.current) return;
     const pending = autosavePendingRef.current;
     if (pending && pending.id !== id) {
       try {
@@ -87,14 +101,16 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       if (sequence === loadSequenceRef.current) setLoadingDoc(false);
     }
-  }, [addToast]);
+  }, [addToast, api]);
 
   const createDocument = useCallback(async ({ title, doc_type = 'cv', engine = null, template_source = null, content = null }) => {
     setSaving(true);
     try {
       const res = await api.post('/documents', { title, doc_type, engine, template_source, content });
+      if (!mountedRef.current) return null;
       addToast(`Created "${title}".`, 'success');
       await fetchDocuments();
+      if (!mountedRef.current) return null;
       activeIdRef.current = res.data.id;
       setActiveDocId(res.data.id);
       setActiveDoc(res.data);
@@ -107,7 +123,7 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       setSaving(false);
     }
-  }, [addToast, fetchDocuments]);
+  }, [addToast, api, fetchDocuments]);
 
   const saveDocument = useCallback(async (newTitle = null, opts = {}) => {
     if (!activeDocId) return false;
@@ -130,6 +146,7 @@ export function useStudio({ user, activeTab, addToast }) {
         }
       }
 
+      if (activeIdRef.current !== savedId) return false;
       const res = await api.put(`/documents/${activeDocId}`, payload);
       if (activeIdRef.current !== savedId) return true;
       setActiveDoc((prev) => ({
@@ -156,7 +173,7 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       setSaving(false);
     }
-  }, [activeDocId, activeDoc?.engine, activeDoc?.source_hash, draftContent, addToast, fetchDocuments]);
+  }, [activeDocId, draftContent, activeDoc?.source_hash, activeDoc?.engine, api, addToast, fetchDocuments]);
 
   // Debounced auto-save for Typst documents: the client-side WASM already keeps the
   // preview live, so persisting the content + PDF ~1.2s after the last keystroke lets
@@ -212,6 +229,7 @@ export function useStudio({ user, activeTab, addToast }) {
       }
 
       const requestId = activeDocId;
+      if (activeIdRef.current !== requestId) return false;
       const res = await api.post(`/documents/${requestId}/compile`, {
         expected_source_hash: activeDoc?.source_hash,
         content: draftContent,
@@ -253,7 +271,7 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       setCompiling(false);
     }
-  }, [activeDocId, activeDoc?.engine, activeDoc?.source_hash, draftContent, addToast, fetchDocuments]);
+  }, [activeDocId, activeDoc?.engine, activeDoc?.source_hash, api, draftContent, addToast, fetchDocuments]);
 
   const downloadTypstPdf = useCallback(async (title = null) => {
     if (!draftContent) return;
@@ -311,7 +329,7 @@ export function useStudio({ user, activeTab, addToast }) {
     } finally {
       setAiEditing(false);
     }
-  }, [activeDocId, activeDoc?.source_hash, draftContent, addToast, fetchDocuments]);
+  }, [activeDocId, api, draftContent, activeDoc?.source_hash, fetchDocuments, addToast]);
 
   const deleteDocument = useCallback(async (id) => {
     if (!id) return false;
@@ -333,14 +351,14 @@ export function useStudio({ user, activeTab, addToast }) {
       addToast('Failed to delete document.', 'error');
       return false;
     }
-  }, [activeDocId, addToast, fetchDocuments, selectDocument]);
+  }, [activeDocId, addToast, api, fetchDocuments, selectDocument]);
 
   // Load documents and templates on auth or when navigating to studio
   useEffect(() => {
     if (!user?.username) return;
     fetchTemplates();
     fetchDocuments().then((docs) => {
-      if (docs && docs.length > 0) {
+      if (mountedRef.current && docs && docs.length > 0) {
         setActiveDocId((currId) => {
           if (!currId) {
             selectDocument(docs[0].id);

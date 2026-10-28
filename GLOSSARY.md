@@ -10,7 +10,7 @@ A person with their own CV, preferences, jobs and documents. All data belongs to
 _Avoid_: Account, profile (a profile is the User's files under `profiles/`)
 
 **Job**:
-A Posting stored for one User, with its Score and Stage. The same Posting stored for two Users is two Jobs.
+A Posting stored for one User, with its Match rating and Stage. The same Posting stored for two Users is two Jobs.
 _Avoid_: Listing, ad, vacancy
 
 **Pipeline**:
@@ -21,17 +21,33 @@ _Avoid_: Kanban, funnel
 Where a Job currently sits in the Pipeline: `new`, `interested`, `applied`, `interview`, `offer`, `rejected` or `not_interested`.
 _Avoid_: Status (the stored field is called `status`, but the concept is Stage)
 
-**Score**:
-The language model's rough judgment of how well a Job fits a User's CV. Not calibrated and not a hiring probability.
-_Avoid_: Rating, match percentage
+**Match rating**:
+A label derived from Requirement checks, Preference conflicts and Eligibility: Great, Good, Decent, Stretch, Poor or Blocked. It describes fit, not a hiring probability.
+_Avoid_: Score, match percentage
+
+**Requirement check**:
+A posting requirement classified as firm or optional, with CV coverage judged shown, related or missing and quotations supporting the judgement.
+_Avoid_: Skill score, checklist point
+
+**Preference conflict**:
+A conflict between a posting condition and a User's Standing Notes, supported by quotations from both. A hard conflict contradicts an explicit requirement; a soft conflict contradicts a preference.
+_Avoid_: Penalty, negative score
+
+**Judgement call**:
+A related firm requirement whose treatment as missing would change the Match rating.
+_Avoid_: Borderline score
 
 **Eligibility**:
-Whether a User may realistically take a Job (language, work permit, level). Separate from Score.
+Whether a User may realistically take a Job (language, work permit, level). A known blocker prevents a positive Match rating.
 _Avoid_: Fit
 
+**Historical analysis**:
+An analysis that has not been checked against the current CV, model and matching rules. Its conclusions need review before they guide a new application.
+_Avoid_: Current match, verified fit
+
 **Historical score**:
-A Score made with a CV or model that has since changed.
-_Avoid_: Stale score, old score
+A numeric judgement of fit retained from the earlier scoring system. It is not a Match rating.
+_Avoid_: Match percentage, converted rating
 
 **Document set**:
 The CV and cover letter generated for one Job, kept as immutable revisions.

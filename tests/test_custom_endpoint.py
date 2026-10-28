@@ -1,3 +1,4 @@
+from model_transport_fixture import inline_transport
 """Models from any OpenAI-compatible endpoint (`custom/<model>`): Ollama, LM Studio, vLLM, llama.cpp, hosted APIs."""
 import json
 import os
@@ -145,3 +146,13 @@ class SettingsModelListTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def setUpModule():
+    global _transport_fixture
+    _transport_fixture = inline_transport()
+    _transport_fixture.start()
+
+
+def tearDownModule():
+    _transport_fixture.stop()

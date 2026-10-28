@@ -1,3 +1,5 @@
+import { MatchRating } from '../MatchEvidence';
+import { compareBestFit, ratingSummary } from '../../constants/ratings';
 import { useDemo } from '../../demoContext';
 import React from 'react';
 import { CalendarDays, CheckCircle2, RefreshCw, Briefcase, ExternalLink, Download, FileText, Mail, XCircle, Wand2 } from 'lucide-react';
@@ -32,7 +34,7 @@ export function DailyTab({
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2 className="card-title"><CalendarDays size={20} /> Daily Scraped Results</h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Showing only jobs with <strong>match score &gt; 65</strong> and German requirements at <strong>B1 or below</strong>.
+          Daily matches use the configured minimum rating and eligibility checks. Historical entries need re-rating before comparison.
         </p>
         {dailyDates.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -117,29 +119,25 @@ export function DailyTab({
             </p>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-            {dailyJobs.map(job => (
+            {[...dailyJobs].sort(compareBestFit).map(job => (
               <div key={job.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      className="daily-job-title"
-                      onClick={() => setSelectedJobDetails(job)}
-                    >{job.title}</div>
+                    <button className="daily-job-title" onClick={() => setSelectedJobDetails(job)}>{job.title}</button>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>{job.company}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
-                    <span className={`badge ${job.match_score >= 80 ? 'badge-score-high' : 'badge-score-med'}`}>
-                      {job.match_score}/100
-                    </span>
+                    <MatchRating job={job} />
                     {job.status && job.status !== 'new' && <StatusBadge status={job.status} />}
                   </div>
                 </div>
-                {job.location && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>📍 {job.location}</div>}
+                {job.location && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{job.location}</div>}
                 {job.salary_yearly ? (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--success-color)', fontWeight: 500 }}>💰 €{Number(job.salary_yearly).toLocaleString('de-AT')} / year</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--success-color)', fontWeight: 500 }}>€{Number(job.salary_yearly).toLocaleString('de-AT')} / year</div>
                 ) : job.salary && job.salary !== 'Not Specified' && (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--success-color)', fontWeight: 500 }}>💰 {job.salary}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--success-color)', fontWeight: 500 }}>{job.salary}</div>
                 )}
+                <p className="calm-job-evidence">{ratingSummary(job)}</p>
                 {job.summary && (
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
                     {job.summary.length > 140 ? job.summary.substring(0, 140) + '…' : job.summary}

@@ -17,6 +17,15 @@ import user_assets  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
 
+def setUpModule():
+    # Discovery imports every module first; point at this module's DB while it runs.
+    db.set_db_path(os.path.join(_TMP, "test.db"))
+
+
+def tearDownModule():
+    db.set_db_path(os.path.join(db.DATA_DIR, "jobweaver.db"))  # The runner's disposable default.
+
+
 class ConfigEndpointsTest(unittest.TestCase):
     """GET/PUT /api/config per-user resolution + save-target behaviour.
 

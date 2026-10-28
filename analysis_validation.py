@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from pydantic import ValidationError
-from job_policy import Constraint, Extraction
+from job_policy import Constraint, Extraction, RequirementCheck, PreferenceConflict, deduplicate_checks, deduplicate_conflicts
 
 logger = logging.getLogger(__name__)
 MAX_RECORDS = 200
@@ -36,6 +36,67 @@ def grounded_span(source, quote):
     return match.group(0) if match else None
 
 
+def standing_notes(cv):
+    """Only the explicit notes section is preference evidence, never arbitrary CV prose."""
+    matches = list(re.finditer(
+        r'(?im)^\s*(?P<hashes>#{1,6}\s*)?(?P<label>(?:Recent Experience & )?Standing Notes)\s*:?[^\S\n]*$', cv))
+    if not matches:
+        return ''
+    match = matches[-1]
+    tail = cv[match.end():]
+    # load_effective_cv appends the separate notes file under this exact marker.
+    # Its nested headings are still notes. A CV's own markdown section ends at
+    # the next heading of the same or higher level.
+    if match['label'].lower().startswith('recent experience'):
+        return tail
+    level = len((match['hashes'] or '').strip())
+    heading_pattern = r'(?m)^#{1,' + str(level or 6) + r'}\s+\S'
+    heading = re.search(heading_pattern, tail)
+    return tail[:heading.start()] if heading else tail
+
+
+_HARD_PREFERENCE = re.compile(r'\b(?:only|never|must|not willing|requires|ausschlie[ßs]lich|nur|niemals|muss)\b', re.I)
+
+
+def ground_match_checks(checks, conflicts, posting, cv):
+    grounded, kept, issues = [], [], []
+    for i, item in enumerate(checks):
+        item = dict(item)
+        span = grounded_span(posting, item.get('posting_quote', ''))
+        if span is None:
+            # Reject instead of dropping a missing must-have and improving the rating.
+            issues.append({'path': f'match_checks.{i}.posting_quote', 'type': 'ungrounded_requirement',
+                           'message': 'Requirement quote is absent from the posting; correct the checklist'})
+            continue
+        item['posting_quote'] = span
+        if item['coverage'] == 'missing':
+            item['cv_quote'] = ''
+        else:
+            cv_span = grounded_span(cv, item.get('cv_quote', ''))
+            if cv_span is None:
+                issues.append({'path': f'match_checks.{i}.cv_quote', 'type': 'ungrounded_cv_quote',
+                               'message': 'CV quote is absent from the CV; counted as missing'})
+                item.update(coverage='missing', cv_quote='')
+            else:
+                item['cv_quote'] = cv_span
+        grounded.append(item)
+    notes_source = standing_notes(cv)
+    for i, conflict in enumerate(conflicts):
+        notes = grounded_span(notes_source, conflict.get('notes_quote', ''))
+        post = grounded_span(posting, conflict.get('posting_quote', ''))
+        if notes is None or post is None:
+            issues.append({'path': f'preference_conflicts.{i}', 'type': 'ungrounded_conflict',
+                           'message': 'Preference conflict lacks verified Standing Notes or posting evidence; omitted'})
+            continue
+        conflict = dict(conflict, notes_quote=notes, posting_quote=post)
+        if conflict['severity'] == 'hard' and not _HARD_PREFERENCE.search(notes):
+            conflict['severity'] = 'soft'
+            issues.append({'path': f'preference_conflicts.{i}.severity', 'type': 'unverified_hard_preference',
+                           'message': 'Standing Notes do not state a hard condition; counted as soft'})
+        kept.append(conflict)
+    return deduplicate_checks(grounded), deduplicate_conflicts(kept), issues
+
+
 class AnalysisValidationError(ValueError):
     def __init__(self, issues):
         self.issues = issues
@@ -45,12 +106,13 @@ class AnalysisValidationError(ValueError):
 
 def _safe_path(location):
     allowed = set(Extraction.model_fields) | {'kind', 'strength', 'value', 'evidence',
+                                            'requirement', 'importance', 'posting_quote', 'coverage', 'cv_quote', 'preference', 'notes_quote', 'severity',
                                             'tier', 'synthesis', 'strengths', 'gaps', 'tips', 'title', 'detail'}
     return '.'.join(str(part) if isinstance(part, int) or part in allowed else '<unknown>'
                     for part in location)
 
 
-def validate_extraction(data, source, matching):
+def validate_extraction(data, source, matching, cv_text=''):
     try:
         validated = Extraction.model_validate(data)
     except ValidationError as error:
@@ -58,10 +120,22 @@ def validate_extraction(data, source, matching):
         issues = [{'path': _safe_path(item['loc']), 'message': item['msg'], 'type': item['type']}
                   for item in error.errors(include_input=False, include_context=False, include_url=False)]
         raise AnalysisValidationError(issues) from None
+    validated.grounding_issues = []  # Never accept model-supplied diagnostic prose.
     issues = []
-    if matching and validated.match_score is None:
-        issues.append({'path': 'match_score', 'message': 'Matching returned no score; analysis remains pending',
-                       'type': 'missing_score'})
+    if matching and validated.match_checks is None:
+        issues.append({'path': 'match_checks', 'message': 'Matching returned no checklist; analysis remains pending',
+                       'type': 'missing_checklist'})
+    if matching and validated.match_checks == [] and validated.requirements:
+        issues.append({'path': 'match_checks', 'message': 'Stated requirements need a matching checklist',
+                       'type': 'missing_checklist'})
+    if matching and validated.match_checks is not None:
+        checks, conflicts, grounding = ground_match_checks(
+            [c.model_dump() for c in validated.match_checks],
+            [c.model_dump() for c in validated.preference_conflicts], source, cv_text)
+        issues.extend(i for i in grounding if i['type'] == 'ungrounded_requirement')
+        validated.match_checks = [RequirementCheck.model_validate(c) for c in checks]
+        validated.preference_conflicts = [PreferenceConflict.model_validate(c) for c in conflicts]
+        validated.grounding_issues = grounding
     quotes = [('german_evidence', validated.german_evidence, validated.german_strength, validated)]
     quotes += [(f'constraints.{i}.evidence', c.evidence, c.strength, c)
                for i, c in enumerate(validated.constraints)]
@@ -140,6 +214,20 @@ def save_failure(source, model, attempt, data, response, issues):
             if isinstance(constraints, list):
                 extraction['constraints_count'] = len(constraints)
                 extraction['constraints'] = [_constraint_metadata(item) for item in constraints[:MAX_ITEMS]]
+            for collection, fields, enums in (
+                ('match_checks', ('requirement', 'posting_quote', 'cv_quote'),
+                 {'importance': ('must', 'nice'), 'coverage': ('shown', 'related', 'missing')}),
+                ('preference_conflicts', ('preference', 'notes_quote', 'posting_quote'),
+                 {'severity': ('hard', 'soft')}),
+            ):
+                values = data.get(collection)
+                if isinstance(values, list):
+                    extraction[collection + '_count'] = len(values)
+                    extraction[collection] = [
+                        {**{key: _text_metadata(item.get(key)) for key in fields},
+                         **{key: item[key] for key, allowed in enums.items() if item.get(key) in allowed}}
+                        if isinstance(item, dict) else {'type': type(item).__name__}
+                        for item in values[:MAX_ITEMS]]
             score = data.get('match_score')
             extraction['match_score'] = score if type(score) is int and 0 <= score <= 100 else _text_metadata(score)
         record = {'timestamp': datetime.now(timezone.utc).isoformat(), 'attempt': attempt,
