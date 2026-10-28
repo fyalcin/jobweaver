@@ -106,8 +106,9 @@ export function CVStudioTab({
     }
 
     if (editorMode !== 'simple') return;
+    if (!activeDoc || !draftContent) return;
 
-    if (activeDoc?.engine === 'typst' && draftContent) {
+    if (activeDoc.engine === 'typst') {
       const res = parseTypstDocument(draftContent);
       if (res.supported) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -630,7 +631,9 @@ export function CVStudioTab({
 
           {/* Right Pane: Live PDF / Typst WASM Preview */}
           <div className="studio-preview-pane">
-            {(isDirty || activeDoc?.pdf_current === false) && <p role="status">The saved PDF is from an earlier version. Compile the current text before using it.</p>}
+            {activeDoc?.engine !== 'typst' && (isDirty || activeDoc?.pdf_current === false) && (
+              <p role="status" className="studio-stale-pdf-banner">The saved PDF is from an earlier version. Compile the current text before using it.</p>
+            )}
             {activeDoc?.engine === 'typst' ? (
               <TypstWasmPreview
                 source={draftContent}

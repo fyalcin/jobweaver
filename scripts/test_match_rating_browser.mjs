@@ -97,8 +97,8 @@ try {
   await page.getByRole('button', { name: 'Back to Jobs' }).click();
   await page.getByRole('textbox', { name: 'Search jobs', exact: true }).fill('Stretch');
   await rows.focus(); await page.keyboard.press('Space');
-  await page.locator('.evidence-table').waitFor();
-  assert.deepEqual(await page.locator('.evidence-table tbody tr td:last-child').allTextContents(), ['missing', 'related', 'shown']);
+  await page.locator('.evidence-checklist').waitFor();
+  assert.deepEqual(await page.locator('.evidence-coverage-pill').evaluateAll(els => els.map(el => el.dataset.coverage)), ['missing', 'related', 'shown']);
   assert.match(await page.locator('.match-evidence').textContent(), /I used Git\./);
   assert.match(await page.locator('.match-evidence').textContent(), /I prefer Vienna\./);
   assert.match(await page.locator('.match-evidence').textContent(), /would be Stretch/);

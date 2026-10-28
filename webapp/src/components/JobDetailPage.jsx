@@ -79,8 +79,9 @@ export function JobDetailPage({
       return;
     }
     if (editorMode !== 'simple') return;
+    if (!studio.currentTex) return;
 
-    if (studio.docEngine === 'typst' && studio.currentTex) {
+    if (studio.docEngine === 'typst') {
       const docKind = studio.activeDocType === 'letter' ? 'cover-letter' : 'cv';
       const res = parseTypstDocument(studio.currentTex, docKind);
       if (res.supported) {

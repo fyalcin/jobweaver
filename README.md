@@ -82,7 +82,11 @@ The [career record format guide](docs/career-record/FORMAT.md) explains how clai
 
 ### Document tools
 
-Typst is the default document engine and can preview and export PDFs directly in the browser. LaTeX remains an option if you prefer it, and Typst users do not need a LaTeX installation. While the demo ships with pre-compiled PDFs, server-side generation, validation, and finalization on a real instance require native command-line tools on Linux:
+Typst is the default document engine and can preview and export PDFs directly in the browser. LaTeX remains an option if you prefer it, and Typst users do not need a LaTeX installation.
+
+![Editing a CV in Simple Mode with live Typst WebAssembly preview](docs/media/cv-studio.gif)
+
+While the demo ships with pre-compiled PDFs, server-side generation, validation, and finalization on a real instance require native command-line tools on Linux:
 
 | Purpose | Installed tools |
 |---|---|
