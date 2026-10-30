@@ -24,6 +24,10 @@ import os, sys
 from pathlib import Path
 from demo_data import seed
 seed(Path(os.environ['JOBWEAVER_DATA_DIR']))
+# Give the fictional job a supported Typst CV for its Simple Mode editor.
+draft = Path(os.environ['JOBWEAVER_DATA_DIR']) / 'profiles/demo/drafts/CumulusResearch_demo_01'
+(draft / 'cv_demo_01.typ').write_text(Path('base-typst/base-cv.typ').read_text())
+(draft / 'sources.json').write_text('{"cv":"typ"}')
 import auth, db, user_assets
 db.create_user('fresh', auth.hash_password('fictional-fresh-password'))
 user_assets.ensure_user_dirs('fresh')
@@ -92,6 +96,22 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Jobs', exact: true }).count(), 1,
     'An old session response signed the new user out');
 
+  await page.getByRole('button', { name: 'Jobs', exact: true }).click();
+  await page.getByRole('button', { name: /^All \d+$/ }).click();
+  await page.locator('.calm-job-company').filter({ hasText: 'Cumulus Research' }).click();
+  await page.getByRole('tab', { name: 'Tailor Studio', exact: true }).click();
+  await page.locator('.simple-editor-container').waitFor();
+  const experienceSection = page.locator('.simple-section-card').filter({
+    has: page.locator('.simple-section-header').filter({ hasText: /Experience/i }),
+  });
+  const experienceHeader = experienceSection.locator('.simple-section-header');
+  assert.equal(await experienceSection.locator('.simple-section-body').count(), 0);
+  await experienceHeader.click();
+  await experienceSection.locator('.simple-section-body').waitFor({ timeout: 3000 });
+  await experienceHeader.click();
+  await experienceSection.locator('.simple-section-body').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Back to Jobs' }).click();
+
   assert.equal((await context.request.put(`${base}/api/config`, { data: {
     document_model: 'custom/fictional-local-model', letter_verifier_model: null,
   } })).status(), 200);
@@ -143,6 +163,7 @@ try {
   assert.deepEqual(errors, []);
   const result = { accountDraftIsolation: true, explicitVerifierRoute: true,
     oldSessionResponseIsolation: true,
+    jobSimpleModeSections: true,
     isolatedLatexAndTypstPdf: true, browserTypstPreview: true, hostileOriginBlocked: true,
     hostileHostBlocked: true, uncaughtErrors: errors, fictionalDataOnly: true };
   await writeFile(join(output, 'verification.json'), JSON.stringify(result, null, 2));

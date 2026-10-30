@@ -54,6 +54,7 @@ export function JobDetailPage({
   const [selectedEngine, setSelectedEngine] = useState(job?.default_document_engine || 'typst');
   const [editorMode, setEditorMode] = useState('simple');
   const [parsedTypst, setParsedTypst] = useState(null);
+  const [simpleOpenSections, setSimpleOpenSections] = useState({ basics: true });
   const [showExportMenu, setShowExportMenu] = useState(false);
   const isLocalSimpleEditRef = useRef(false);
   const textareaRef = useRef(null);
@@ -1032,6 +1033,8 @@ export function JobDetailPage({
                       kind={parsedTypst.kind}
                       onChange={handleSimpleChange}
                       disabled={studio.saving || studio.compiling || studio.aiEditing}
+                      openSections={simpleOpenSections}
+                      setOpenSections={setSimpleOpenSections}
                     />
                   ) : (
                     <StudioCodeEditor
