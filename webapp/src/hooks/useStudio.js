@@ -236,8 +236,9 @@ export function useStudio({ user, activeTab, addToast }) {
         pdf_base64: pdfBase64,
       });
 
-      if (activeIdRef.current !== requestId || draftRef.current !== draftContent) return false;
+      if (activeIdRef.current !== requestId) return false;
       if (res.data.success) {
+        // Track the saved source without replacing text typed during compilation.
         setActiveDoc((prev) => ({
           ...prev,
           source_hash: res.data.source_hash,
@@ -259,6 +260,9 @@ export function useStudio({ user, activeTab, addToast }) {
       } else {
         setActiveDoc((prev) => ({
           ...prev,
+          source_hash: res.data.source_hash,
+          pdf_current: res.data.pdf_current,
+          content: draftContent,
           error: res.data.error,
         }));
         addToast(res.data.error?.message || 'Compilation failed.', 'error');

@@ -141,6 +141,56 @@ try {
   await page.getByText('Live WASM', { exact: true }).waitFor();
   await page.locator('.typst-page-card svg').waitFor();
 
+  // Editing during a real native compile must leave the newer draft saveable.
+  await page.getByRole('combobox', { name: 'Select active studio document' }).selectOption(docs[0].id);
+  const editor = page.locator('.studio-textarea');
+  await editor.waitFor();
+  await page.waitForFunction(() => document.querySelector('.studio-textarea')?.value.includes('Fictional LaTeX CV'));
+  const originalSource = await editor.inputValue();
+  const compilePath = `/api/documents/${docs[0].id}/compile`;
+  let releaseCompile, compileSaved;
+  const savedCompile = new Promise(done => { compileSaved = done; });
+  await page.route(`**${compilePath}`, async route => {
+    const response = await route.fetch();
+    await new Promise(release => { releaseCompile = release; compileSaved(); });
+    await route.fulfill({ response });
+  });
+  await editor.fill(originalSource.replace('Fictional LaTeX CV', 'Compiled fictional CV'));
+  await editor.press('Control+Enter');
+  await Promise.race([savedCompile, delay(30000, undefined, { ref: false }).then(() => { throw Error('Native compile did not reach the response gate.'); })]);
+  const newerSource = originalSource.replace('Fictional LaTeX CV', 'Newer typing after compile started');
+  await editor.fill(newerSource);
+  releaseCompile();
+  await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('button')].find(node => node.title.includes('Recompile document'));
+    return button && !button.disabled;
+  });
+  const savedDraft = page.waitForResponse(response => response.request().method() === 'PUT'
+    && new URL(response.url()).pathname === `/api/documents/${docs[0].id}`);
+  await editor.press('Control+s');
+  assert.equal((await savedDraft).status(), 200, 'Newer typing became unsaveable after compilation.');
+  const persisted = await (await context.request.get(`${base}/api/documents/${docs[0].id}`)).json();
+  assert.equal(persisted.content, newerSource);
+  await page.unroute(`**${compilePath}`);
+
+  // Failed native builds also save source; repairing that source must still work.
+  const invalidSource = originalSource.replace('\\begin{document}', '\\begin{document}\\DefinitelyUndefinedCommand');
+  await editor.fill(invalidSource);
+  const failedCompile = page.waitForResponse(response => new URL(response.url()).pathname === compilePath);
+  await editor.press('Control+Enter');
+  assert.equal((await (await failedCompile).json()).success, false);
+  await page.waitForFunction(() => {
+    const button = [...document.querySelectorAll('button')].find(node => node.title.includes('Recompile document'));
+    return button && !button.disabled;
+  });
+  await editor.fill(newerSource);
+  const repairedDraft = page.waitForResponse(response => response.request().method() === 'PUT'
+    && new URL(response.url()).pathname === `/api/documents/${docs[0].id}`);
+  await editor.press('Control+s');
+  assert.equal((await repairedDraft).status(), 200, 'A failed build left the repaired source unsaveable.');
+  await page.getByRole('combobox', { name: 'Select active studio document' }).selectOption(docs[1].id);
+  await page.locator('.typst-page-card svg').waitFor();
+
   attacker = http.createServer((_, response) => {
     response.setHeader('Content-Type', 'text/html');
     response.end('<!doctype html><title>Fictional foreign origin</title>');
@@ -164,6 +214,8 @@ try {
   const result = { accountDraftIsolation: true, explicitVerifierRoute: true,
     oldSessionResponseIsolation: true,
     jobSimpleModeSections: true,
+    editsDuringCompileRemainSaveable: true,
+    failedCompileCanBeRepaired: true,
     isolatedLatexAndTypstPdf: true, browserTypstPreview: true, hostileOriginBlocked: true,
     hostileHostBlocked: true, uncaughtErrors: errors, fictionalDataOnly: true };
   await writeFile(join(output, 'verification.json'), JSON.stringify(result, null, 2));

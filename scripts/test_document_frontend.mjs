@@ -153,3 +153,5 @@ console.log('Background regressions passed: queued polling and interrupted clean
 await import('./test_ui_preferences.mjs');
 
 await import('./test_match_rating_frontend.mjs');
+
+await import('./test_studio_frontend.mjs');
