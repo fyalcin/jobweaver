@@ -10,6 +10,8 @@ Searching for a technical role usually means juggling browser tabs, a spreadshee
 
 I built Jobweaver to keep the posting, fit check, application stage, and document history in one place, and to put strict guardrails around what the model is allowed to claim. You can pull in postings by pasting text, giving a URL, polling employer feeds, or running Apify connectors. Jobweaver checks each posting against your CV, tracks your applications through seven stages from `New` to `Offer` or `Rejected`, compiles PDFs with Typst or LaTeX while keeping earlier revisions, and exposes four read-only MCP tools if you want to query your pipeline from an assistant. Each account on the server has its own postings, profile, settings, and document library.
 
+I built this for my own job search. It turned out to be so helpful that I decided to share it, in case it is useful to someone else too.
+
 ## Project status
 
 Early release (October 2026). Jobweaver is meant to run on your own computer or home server for yourself and a few people you trust. It has per-account data, isolated document compilers, request limits, and daily model quotas, but it has not had an external security review and is not hardened for the open internet. Run it on localhost or a private network such as Tailscale or WireGuard, and read [Known limitations](#known-limitations) before relying on it.
