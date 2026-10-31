@@ -1,6 +1,6 @@
 [project]
 name = "jobweaver"
-version = "1.0.0"
+version = "0.1.0"
 description = "Self-hosted job search: collect postings, score them against your CV, track applications, and write evidence-checked CVs and cover letters."
 authors = [{ name = "Fırat Yalçın" }]
 license = "MIT"
