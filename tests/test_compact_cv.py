@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
-from cv_profiles import PROFILES, profile_compact_template, profile_template
-from server import GenerateRequest, BatchGenerateRequest, ManualJobRequest, RefineStartRequest
+from jobweaver.cv_profiles import PROFILES, profile_compact_template, profile_template
+from jobweaver.server import GenerateRequest, BatchGenerateRequest, ManualJobRequest, RefineStartRequest
 
 
 class TestCompactCvGeneration(unittest.TestCase):

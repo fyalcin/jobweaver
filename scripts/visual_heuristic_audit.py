@@ -23,8 +23,8 @@ from selenium.webdriver.support import expected_conditions as EC
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from auth import create_session_token, SESSION_COOKIE_NAME
-from db import init_db, get_user_by_username
+from jobweaver.auth import create_session_token, SESSION_COOKIE_NAME
+from jobweaver.db import init_db, get_user_by_username
 
 DOM_METRICS_JS = """
 return (() => {

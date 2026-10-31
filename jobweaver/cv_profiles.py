@@ -18,7 +18,7 @@ import importlib.util
 import os
 from typing import Any
 
-from user_assets import user_profile_dir
+from jobweaver.user_assets import user_profile_dir
 
 RESEARCH_TERMS = {"research", "scientific computing", "scientific software", "computational", "physics", "materials science", "hpc", "slurm", "simulation", "postdoc", "phd", "doctoral", "laboratory", "academia"}
 INDUSTRY_TERMS = {"backend", "python developer", "software developer", "automation", "api", "rest", "web application", "data engineer", "data processing", "docker", "database", "microservice", "pytest", "platform engineer"}

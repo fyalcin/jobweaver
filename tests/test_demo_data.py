@@ -19,10 +19,10 @@ class DemoDataTest(unittest.TestCase):
 import hashlib, json, sys
 from pathlib import Path
 from unittest.mock import patch
-from demo_data import seed
+from jobweaver.demo_data import seed
 data = Path(sys.argv[1])
 seed(data)
-import auth, db, server
+from jobweaver import auth, db, server
 from fastapi.testclient import TestClient
 assert Path(db.DB_PATH).parent == data
 assert len(db.list_users()) == 2
@@ -68,7 +68,7 @@ assert client.get('/api/jobs').status_code == 401
             self.run_script('''
 from pathlib import Path
 import sys
-from demo_data import seed
+from jobweaver.demo_data import seed
 try:
     seed(Path(sys.argv[1]))
 except ValueError:

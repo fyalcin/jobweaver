@@ -4,15 +4,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 # Point db at a throwaway SQLite file before importing server
 _TMP = tempfile.mkdtemp(prefix="gj-studio-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import user_assets  # noqa: E402
-import generators  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import user_assets  # noqa: E402
+from jobweaver import generators  # noqa: E402
 
 
 def setUpModule():
@@ -148,10 +148,10 @@ Here is how much of TeX's memory you used...
         self.assertEqual(v_loaded["cv"][0]["id"], "1001")
 
         # Test snapshot creation code path with mock AI edit
-        with mock.patch("server.ai_surgical_edit_latex", return_value="% Modified"):
-            with mock.patch("server.compile_latex", return_value=(True, "")):
-                with mock.patch("server.convert_pdf_to_images", return_value=[]):
-                    with mock.patch("db.get_job_by_id", return_value={"id": "j1", "company": "TestCo"}):
+        with mock.patch("jobweaver.server.ai_surgical_edit_latex", return_value="% Modified"):
+            with mock.patch("jobweaver.server.compile_latex", return_value=(True, "")):
+                with mock.patch("jobweaver.server.convert_pdf_to_images", return_value=[]):
+                    with mock.patch("jobweaver.db.get_job_by_id", return_value={"id": "j1", "company": "TestCo"}):
                         req = server.JobDocAiEditRequest(
                             document_type="cv",
                             tex="% Pre-edit tex",
@@ -202,7 +202,7 @@ Here is how much of TeX's memory you used...
         with open(os.path.join(draft_dir, "cv_fresh_1_v0.tex"), "w", encoding="utf-8") as f:
             f.write(pristine_tex)
 
-        with mock.patch("db.get_job_by_id", return_value={"id": "fresh_1", "company": "FreshCo"}):
+        with mock.patch("jobweaver.db.get_job_by_id", return_value={"id": "fresh_1", "company": "FreshCo"}):
             # 1. get_job_documents should automatically seed Original Draft into ai_versions.json
             doc_res = server.get_job_documents("fresh_1", user=self._default_user())
             self.assertTrue(doc_res["success"])
@@ -212,9 +212,9 @@ Here is how much of TeX's memory you used...
 
             # 2. User makes manual edits, then runs AI edit
             manual_edited_tex = "% Pristine Generated CV with My Manual Edits"
-            with mock.patch("server.ai_surgical_edit_latex", return_value="% AI Output After Manual Edits"):
-                with mock.patch("server.compile_latex", return_value=(True, "")):
-                    with mock.patch("server.convert_pdf_to_images", return_value=[]):
+            with mock.patch("jobweaver.server.ai_surgical_edit_latex", return_value="% AI Output After Manual Edits"):
+                with mock.patch("jobweaver.server.compile_latex", return_value=(True, "")):
+                    with mock.patch("jobweaver.server.convert_pdf_to_images", return_value=[]):
                         ai_req = server.JobDocAiEditRequest(
                             document_type="cv",
                             tex=manual_edited_tex,

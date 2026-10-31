@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest import mock
 
-import scrapers
+from jobweaver import scrapers
 
 
 REWE_NOISY = """Marktmanager:in Stellvertretung | Jobs bei REWE Group

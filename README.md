@@ -82,20 +82,22 @@ uv run --frozen python scripts/demo.py --port 8002
 
 ### Use your own data
 
+Run all `python -m jobweaver...` commands from the repository root. They do not work from other directories.
+
 First, complete the dependency setup above. These commands then copy the example environment file, set an administrator password, build the frontend, and start the server:
 
 ```bash
 cp .env.example .env
-uv run python manage_users.py passwd admin
+uv run python -m jobweaver.manage_users passwd admin
 npm --prefix webapp run build
-uv run python server.py
+uv run python -m jobweaver.server
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and sign in as `admin`. Put your CV text in **Personalize**. Select your models and collection sources in **Settings**.
 
 Scoring and document generation stay off until your account has its own CV, in Personalize or in a career record. This prevents accidental scoring against the fictional template. If an analysis fails, the Jobs tab shows the failure reason and a retry button.
 
-To add another person to your instance, run `uv run python manage_users.py add USERNAME`.
+To add another person to your instance, run `uv run python -m jobweaver.manage_users add USERNAME`.
 
 To build documents from verified claims, do these steps:
 
@@ -104,7 +106,7 @@ To build documents from verified claims, do these steps:
 3. Check the file before you generate documents:
 
 ```bash
-uv run python career_record.py check profiles/admin/career_record.yaml
+uv run python -m jobweaver.career_record check profiles/admin/career_record.yaml
 ```
 
 The [career record format guide](docs/career-record/FORMAT.md) explains claims, ownership levels, and approved wording. A German CV or cover letter needs approved German wording on each claim that the document uses.
@@ -170,11 +172,11 @@ URL imports read `schema.org/JobPosting` data over pinned public IPs. They have 
 Daily collection is off by default. Enable your sources in `scraper_config.json` and check your model selection. You can then run a collection manually or from cron:
 
 ```bash
-uv run python daily_scraper.py --user admin
+uv run python -m jobweaver.daily_scraper --user admin
 ```
 
 ```cron
-0 8 * * * cd /path/to/jobweaver && /path/to/uv run --frozen python daily_scraper.py --user admin >> /path/to/jobweaver/daily.log 2>&1
+0 8 * * * cd /path/to/jobweaver && /path/to/uv run --frozen python -m jobweaver.daily_scraper --user admin >> /path/to/jobweaver/daily.log 2>&1
 ```
 
 The daily script collects and scores postings. It can also automatically draft documents for eligible roles. A role qualifies when its current match rating is at least `auto_generate.min_rating` (default `good`).
@@ -209,11 +211,11 @@ Each operation has a limit on calls and time:
 
 Each account also has a daily quota of 300 model requests and 2,400,000 requested output tokens. `JOBWEAVER_QUOTA_TZ` sets the time zone for the calendar day.
 
-To change the quota for all users, set `JOBWEAVER_QUOTA_REQUESTS` and `JOBWEAVER_QUOTA_OUTPUT_TOKENS` in `.env`. To change the quota for one user, use `manage_users.py`:
+To change the quota for all users, set `JOBWEAVER_QUOTA_REQUESTS` and `JOBWEAVER_QUOTA_OUTPUT_TOKENS` in `.env`. To change the quota for one user, use `jobweaver.manage_users`:
 
 ```bash
-uv run python manage_users.py quota USERNAME --attempts 100 --output-tokens 800000   # or --default
-uv run python manage_users.py usage [USERNAME] [--day YYYY-MM-DD]
+uv run python -m jobweaver.manage_users quota USERNAME --attempts 100 --output-tokens 800000   # or --default
+uv run python -m jobweaver.manage_users usage [USERNAME] [--day YYYY-MM-DD]
 ```
 
 Each attempted request counts against the quota. This includes failed and cancelled calls.
@@ -231,12 +233,12 @@ Also set a spending cap on your model provider key.
 
 ### Read-only MCP
 
-If you use an MCP-compatible assistant, `jobweaver_mcp.py` gives it four read-only tools over local `stdio`: `list_jobs`, `get_job`, `get_pipeline`, and `list_documents`. The web backend must be running.
+If you use an MCP-compatible assistant, `jobweaver/jobweaver_mcp.py` gives it four read-only tools over local `stdio`: `list_jobs`, `get_job`, `get_pipeline`, and `list_documents`. The web backend must be running.
 
-Store your password in a `chmod 600` file outside the repository. Then point your MCP client at this command:
+Store your password in a `chmod 600` file outside the repository. Then point your MCP client at this command. The `--directory` option is necessary because the command works only from the repository root:
 
 ```bash
-uv run python jobweaver_mcp.py --url http://127.0.0.1:8000 --username admin --password-file /absolute/path/to/password-file
+uv run --directory /absolute/path/to/jobweaver python -m jobweaver.jobweaver_mcp --url http://127.0.0.1:8000 --username admin --password-file /absolute/path/to/password-file
 ```
 
 The MCP tools respect your account permissions. They also mark scraped job descriptions as untrusted text. This helps the assistant spot prompt-injection attempts inside job postings.

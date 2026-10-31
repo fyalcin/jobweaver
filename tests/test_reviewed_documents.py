@@ -4,8 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-import reviewed_documents as documents
-import user_assets
+from jobweaver import reviewed_documents as documents
+from jobweaver import user_assets
 
 
 class ReviewedDocumentsTest(unittest.TestCase):

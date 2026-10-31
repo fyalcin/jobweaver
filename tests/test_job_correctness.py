@@ -3,16 +3,16 @@ import os
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
-import db
-import scrapers
-import server
-from job_policy import eligibility, qualifies
+from jobweaver import db
+from jobweaver import scrapers
+from jobweaver import server
+from jobweaver.job_policy import eligibility, qualifies
 
 
 class ExtractionValidationTest(unittest.TestCase):
     def analyze(self, **changes):
         response = {'german_level': 'none', 'summary': 'Synthetic job', 'match_checks': [{'requirement': 'Synthetic skill', 'importance': 'must', 'posting_quote': 'Synthetic job', 'coverage': 'shown', 'cv_quote': 'Synthetic CV'}], **changes}
-        with patch('scrapers.run_ai_prompt', return_value=json.dumps(response)):
+        with patch('jobweaver.scrapers.run_ai_prompt', return_value=json.dumps(response)):
             return scrapers.process_job_with_ai('Synthetic job with German preferred', 'Synthetic CV', denoise=False)
 
     def test_bad_checks_and_shapes_rejected(self):
@@ -21,7 +21,7 @@ class ExtractionValidationTest(unittest.TestCase):
                 self.analyze(match_checks=value)
         with self.assertRaises(ValueError):
             self.analyze(match_analysis={'strengths': [42], 'gaps': 'oops'})
-        with patch('scrapers.run_ai_prompt', return_value='{}'), self.assertRaises(ValueError):
+        with patch('jobweaver.scrapers.run_ai_prompt', return_value='{}'), self.assertRaises(ValueError):
             scrapers.process_job_with_ai('posting', 'CV', denoise=False)
 
     def test_tier_is_derived_and_raw_posting_retained(self):
@@ -56,7 +56,7 @@ class ExtractionValidationTest(unittest.TestCase):
 def feed(rows, errors=()):
     """Serve `rows` as one company-feed run (the stand-in Source for pipeline tests)."""
     rows = [{'source': 'Company feed (Greenhouse)', **row} for row in rows]
-    return patch.multiple('company_feeds', load_companies=MagicMock(return_value={'companies': []}),
+    return patch.multiple('jobweaver.company_feeds', load_companies=MagicMock(return_value={'companies': []}),
                           fetch_company_postings=MagicMock(return_value=(rows, list(errors))))
 
 
@@ -87,13 +87,13 @@ class PostingLifecycleTest(unittest.TestCase):
         def analysis(text, *args, **kwargs):
             return {'raw_description': text, 'description': text, 'german_level': 'none', 'requires_german': False,
                     'salary': 'Not Specified', 'skills': '', 'summary': 'Synthetic', 'match_score': 80}
-        with feed(rows), patch('scrapers.process_job_with_ai', side_effect=analysis) as ai:
+        with feed(rows), patch('jobweaver.scrapers.process_job_with_ai', side_effect=analysis) as ai:
             result = scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user, cv_text='CV')
             self.assertEqual(ai.call_count, 1)
             self.assertEqual(result['new_jobs_count'], 1)
         record = db.get_job_by_url('https://example.invalid/1', 1)
         db.update_job_fields(record['id'], user_id=1, status='applied')
-        with feed([{**rows[0], 'description': 'Version two'}]), patch('scrapers.process_job_with_ai', side_effect=analysis):
+        with feed([{**rows[0], 'description': 'Version two'}]), patch('jobweaver.scrapers.process_job_with_ai', side_effect=analysis):
             scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user, cv_text='CV')
         self.assertEqual(db.get_job_by_url('https://example.invalid/1', 1)['status'], 'applied')
 
@@ -107,7 +107,7 @@ class PostingLifecycleTest(unittest.TestCase):
         rows = [good, {**good, 'id': '', 'job_url': 'https://example.invalid/2', 'title': 'No id'},
                 {**good, 'id': 'ds_3', 'job_url': 'https://example.invalid/3', 'title': 'No text', 'description': ''}]
         logs = []
-        with feed(rows), patch('scrapers.process_job_with_ai', side_effect=self._analysis):
+        with feed(rows), patch('jobweaver.scrapers.process_job_with_ai', side_effect=self._analysis):
             result = scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user, cv_text='CV',
                                               log_fn=lambda msg, level='info': logs.append((level, msg)))
         self.assertEqual(result['new_jobs_count'], 1)
@@ -122,7 +122,7 @@ class PostingLifecycleTest(unittest.TestCase):
 
     def test_every_record_rejected_is_a_failed_run(self):
         rows = [{'id': 'x', 'job_url': 'https://example.invalid/1', 'title': 'T', 'company': 'C', 'description': ''}]
-        with feed(rows), patch('scrapers.process_job_with_ai') as ai:
+        with feed(rows), patch('jobweaver.scrapers.process_job_with_ai') as ai:
             result = scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user)
         self.assertEqual(result['state'], 'failed')
         ai.assert_not_called()
@@ -132,14 +132,14 @@ class PostingLifecycleTest(unittest.TestCase):
                  'description': 'Version one', 'location': 'Wien'}
         later = [{**first, 'description': 'Version two', 'location': None},
                  {**first, 'id': 'ds_10', 'job_url': 'https://example.invalid/10', 'description': 'Other'}]
-        with feed([first]), patch('scrapers.process_job_with_ai', side_effect=self._analysis):
+        with feed([first]), patch('jobweaver.scrapers.process_job_with_ai', side_effect=self._analysis):
             scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user, cv_text='CV')
-        with feed(later), patch('scrapers.process_job_with_ai', side_effect=self._analysis):
+        with feed(later), patch('jobweaver.scrapers.process_job_with_ai', side_effect=self._analysis):
             scrapers.scrape_new_jobs(scrapers.ScrapeParams(source='company-feeds'), user=self.user, cv_text='CV')
         self.assertEqual(db.get_job_by_id('ds_9', 1)['location'], 'Wien')
 
     def test_manual_failure_is_saved_and_retryable(self):
-        with patch('server._scrapers.process_job_with_ai', side_effect=ValueError('bad response')):
+        with patch('jobweaver.server._scrapers.process_job_with_ai', side_effect=ValueError('bad response')):
             result = server.add_job_manual(server.ManualJobRequest(title='Synthetic', description='Posting'), user=self.user)
         self.assertFalse(result['success'])
         self.assertTrue(result['saved'])
@@ -152,7 +152,7 @@ class PostingLifecycleTest(unittest.TestCase):
         self.assertEqual(result['state'], 'failed')
 
     def test_daily_policy_current_scores_and_revision_urls(self):
-        from job_policy import fingerprint
+        from jobweaver.job_policy import fingerprint
         from pathlib import Path
         output = Path(self.temp.name, 'Synthetic_daily')
         output.mkdir()
@@ -164,11 +164,11 @@ class PostingLifecycleTest(unittest.TestCase):
         db.upsert_job(record, user_id=1)
         # Pending null scores cause pandas to represent the validated score as 80.0.
         db.upsert_job({**record, 'id': 'pending', 'match_score': None, 'match_rating': None, 'match_checks': [], 'analysis_schema': None, 'analysis_fingerprint': None, 'processed': 0}, user_id=1)
-        with patch('server.load_user_config_dict', return_value=config), patch('server.load_cv_text', return_value='CV'), patch('server._effective_ai_model', return_value='mock'), patch('server.user_outputs_dir', return_value=self.temp.name):
+        with patch('jobweaver.server.load_user_config_dict', return_value=config), patch('jobweaver.server.load_cv_text', return_value='CV'), patch('jobweaver.server._effective_ai_model', return_value='mock'), patch('jobweaver.server.user_outputs_dir', return_value=self.temp.name):
             response = server.get_daily_results('2026-10-01', user=self.user)
             self.assertEqual([job['id'] for job in response['jobs']], ['daily'])
             self.assertIn('/revisions/', response['jobs'][0]['cv_url'])
-        with patch('server.load_user_config_dict', return_value=config), patch('server.load_cv_text', return_value='CHANGED CV'), patch('server._effective_ai_model', return_value='mock'), patch('server.user_outputs_dir', return_value=self.temp.name):
+        with patch('jobweaver.server.load_user_config_dict', return_value=config), patch('jobweaver.server.load_cv_text', return_value='CHANGED CV'), patch('jobweaver.server._effective_ai_model', return_value='mock'), patch('jobweaver.server.user_outputs_dir', return_value=self.temp.name):
             self.assertEqual(server.get_daily_results('2026-10-01', user=self.user)['jobs'], [])
 
     def test_conflicting_id_and_url_never_merge_two_applications(self):

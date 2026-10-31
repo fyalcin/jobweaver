@@ -12,15 +12,15 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-import company_feeds as feeds
-import auth
-import daily_scraper
-import db
-import input_limits as limits
-import request_limits
-import scrapers
-import server
-import user_assets
+from jobweaver import company_feeds as feeds
+from jobweaver import auth
+from jobweaver import daily_scraper
+from jobweaver import db
+from jobweaver import input_limits as limits
+from jobweaver import request_limits
+from jobweaver import scrapers
+from jobweaver import server
+from jobweaver import user_assets
 from pdf_fixture import pdf_bytes
 
 
@@ -81,7 +81,7 @@ class InputContractsTest(unittest.TestCase):
         users.assert_not_called()
 
     def test_cli_rejects_invalid_override_without_starting_daily_work(self):
-        result = subprocess.run([sys.executable, 'daily_scraper.py', '--linkedin-limit', '501'],
+        result = subprocess.run([sys.executable, '-m', 'jobweaver.daily_scraper', '--linkedin-limit', '501'],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn('less than or equal to 500', result.stderr)

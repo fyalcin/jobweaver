@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 # Point db at a throwaway SQLite file BEFORE importing scrapers.
 _TMP = tempfile.mkdtemp(prefix="gj-li-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import scrapers  # noqa: E402
+from jobweaver import scrapers  # noqa: E402
 
 BEBITY = scrapers.LINKEDIN_ACTOR_BEBITY
 LEGACY = scrapers.LINKEDIN_ACTOR_LEGACY

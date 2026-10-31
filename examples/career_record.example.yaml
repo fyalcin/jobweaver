@@ -1,5 +1,5 @@
 # Career record of a fictional applicant. Format: docs/career-record/FORMAT.md
-# Check it with:  uv run python career_record.py check examples/career_record.example.yaml
+# Check it with:  uv run python -m jobweaver.career_record check examples/career_record.example.yaml
 format: 1
 name: Alex Example, MSc
 

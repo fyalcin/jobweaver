@@ -5,10 +5,10 @@ import unittest
 import base64
 from unittest import mock
 
-import db
-import generators
-import server
-import user_assets
+from jobweaver import db
+from jobweaver import generators
+from jobweaver import server
+from jobweaver import user_assets
 from pdf_fixture import pdf_bytes
 
 
@@ -258,8 +258,8 @@ class TestTypstSupport(unittest.TestCase):
         self.assertEqual(template, "base-cv.typ")
 
 
-    @mock.patch("server.compile_job_document", return_value={"success": True})
-    @mock.patch("server.reviewed_documents.generate")
+    @mock.patch("jobweaver.server.compile_job_document", return_value={"success": True})
+    @mock.patch("jobweaver.server.reviewed_documents.generate")
     def test_try_generate_cv_pdf_typst_dispatch(self, mock_gen_typst, mock_compile_typst):
         user = self._user()
         job_id = "test_gen_cv_job"
@@ -280,15 +280,15 @@ class TestTypstSupport(unittest.TestCase):
         mock_gen_typst.return_value = "// Tailored Typst CV\n#set text(10pt)\n= Alex"
         mock_compile_typst.return_value = {"success": True}
 
-        with mock.patch("server.finalize_job_documents", return_value={"success": True}):
+        with mock.patch("jobweaver.server.finalize_job_documents", return_value={"success": True}):
             err = server._try_generate_cv_pdf(job_id, "test-model", "", user, engine="typst")
         self.assertIsNone(err)
         self.assertTrue(mock_gen_typst.called)
         self.assertEqual(mock_gen_typst.call_args[0][5], 'industry')
         self.assertTrue(mock_compile_typst.called)
 
-    @mock.patch("server.compile_job_document", return_value={"success": True})
-    @mock.patch("server.reviewed_documents.generate")
+    @mock.patch("jobweaver.server.compile_job_document", return_value={"success": True})
+    @mock.patch("jobweaver.server.reviewed_documents.generate")
     def test_try_generate_letter_pdf_typst_dispatch(self, mock_gen_letter, mock_compile_typst):
         user = self._user()
         job_id = "test_gen_letter_job"
@@ -308,7 +308,7 @@ class TestTypstSupport(unittest.TestCase):
         mock_gen_letter.return_value = "// Tailored Typst Letter\n= Letter Content"
         mock_compile_typst.return_value = {"success": True}
 
-        with mock.patch("server.finalize_job_documents", return_value={"success": True}):
+        with mock.patch("jobweaver.server.finalize_job_documents", return_value={"success": True}):
             err = server._try_generate_letter_pdf(job_id, "test-model", "", user, engine="typst")
         self.assertIsNone(err)
         self.assertTrue(mock_gen_letter.called)

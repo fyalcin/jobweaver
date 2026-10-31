@@ -9,14 +9,15 @@ import tempfile
 import shutil
 from typing import Optional, Tuple
 
-import demo_mode
-import model_transport
-from operation_budget import operation, check, current, OperationTerminated, OperationBusy
-from compiler_sandbox import run_tool
+from jobweaver import PROJECT_ROOT
+from jobweaver import demo_mode
+from jobweaver import model_transport
+from jobweaver.operation_budget import operation, check, current, OperationTerminated, OperationBusy
+from jobweaver.compiler_sandbox import run_tool
 
 logger = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.abspath(__file__))
+_ROOT = str(PROJECT_ROOT)
 _SCRAPER_CONFIG_PATH = os.path.join(_ROOT, "scraper_config.json")
 
 
@@ -436,12 +437,12 @@ def _compile_fresh(folder, filename, output_filename, output_dir, engine, resour
     Only explicit input files and public tool resources enter the native sandbox.
     """
     from pathlib import Path
-    from document_artifacts import atomic_write, record_build, BUILD_TIMEOUT
+    from jobweaver.document_artifacts import atomic_write, record_build, BUILD_TIMEOUT
     target = Path(output_dir).resolve()
     target.mkdir(parents=True, exist_ok=True)
     name = Path(output_filename or filename).stem
     source = Path(folder, filename).read_text(encoding="utf-8")
-    atomic_write(target / (name + '.pdf.attempt.json'), json.dumps({'success': False, 'source_hash': __import__('document_artifacts').digest(source)}))
+    atomic_write(target / (name + '.pdf.attempt.json'), json.dumps({'success': False, 'source_hash': __import__('jobweaver.document_artifacts', fromlist=['digest']).digest(source)}))
     with tempfile.TemporaryDirectory(prefix="document-build-") as temp:
         build = Path(temp)
         for directory in (resource_dir, folder):
@@ -526,7 +527,7 @@ def compile_latex_diff(folder, old_filename, new_filename, output_filename, outp
 def convert_pdf_to_images(pdf_filepath: str, output_dir: str, prefix: str):
     """Render fresh pages; never combine a new PDF with old preview pages."""
     from pathlib import Path
-    from document_artifacts import atomic_write
+    from jobweaver.document_artifacts import atomic_write
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='document-preview-') as temp:
@@ -654,13 +655,13 @@ def parse_typst_error(log_content: str) -> dict:
 
 @operation()
 def ai_surgical_edit_typst(typst_code, instruction, selection=None, model_name="z-ai/glm-5.3-flash", user=None):
-    from reviewed_documents import grounded_edit
+    from jobweaver.reviewed_documents import grounded_edit
     return grounded_edit(typst_code, instruction, user, model_name, run_ai_prompt)
 
 
 @operation()
 def ai_surgical_edit_latex(tex_code, instruction, selection=None, model_name="z-ai/glm-5.3-flash", user=None):
-    from reviewed_documents import grounded_edit
+    from jobweaver.reviewed_documents import grounded_edit
     return grounded_edit(tex_code, instruction, user, model_name, run_ai_prompt)
 
 
@@ -675,7 +676,7 @@ STRICT INSTRUCTION (German documents): Schreibe natürliches, menschliches Deuts
 
 @operation()
 def refine_document_with_feedback(current_tex, feedback, model_name="z-ai/glm-5.3-flash", tone="", user=None):
-    from reviewed_documents import grounded_edit
+    from jobweaver.reviewed_documents import grounded_edit
     return grounded_edit(current_tex, feedback, user, model_name, run_ai_prompt)
 
 

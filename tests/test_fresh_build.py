@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
-import generators
+from jobweaver import generators
 
 
 class FreshBuildTest(unittest.TestCase):
@@ -17,7 +17,7 @@ class FreshBuildTest(unittest.TestCase):
                 pdf = Path(temp, 'document.pdf')
                 pdf.write_bytes(b'previous good bytes')
                 function = generators.compile_latex if engine == 'latex' else generators.compile_typst
-                with patch('generators.run_tool', return_value=subprocess.CompletedProcess([], 1, b'', b'compiler error')):
+                with patch('jobweaver.generators.run_tool', return_value=subprocess.CompletedProcess([], 1, b'', b'compiler error')):
                     ok, log = function(temp, filename, 'document.pdf', temp)
                 self.assertFalse(ok)
                 self.assertIn('compiler error', log)
@@ -28,13 +28,13 @@ class FreshBuildTest(unittest.TestCase):
     def test_exit_zero_without_pdf_is_failure(self):
         with tempfile.TemporaryDirectory() as temp:
             Path(temp, 'document.tex').write_text('synthetic source')
-            with patch('generators.run_tool', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
+            with patch('jobweaver.generators.run_tool', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
                 self.assertFalse(generators.compile_studio_document(temp)[0])
 
     def test_timeout_is_reported(self):
         with tempfile.TemporaryDirectory() as temp:
             Path(temp, 'document.tex').write_text('synthetic source')
-            with patch('generators.run_tool', side_effect=subprocess.TimeoutExpired('pdflatex', 45)):
+            with patch('jobweaver.generators.run_tool', side_effect=subprocess.TimeoutExpired('pdflatex', 45)):
                 self.assertFalse(generators.compile_studio_document(temp)[0])
 
     def test_escape_does_not_escape_its_own_commands(self):
@@ -49,7 +49,7 @@ class FreshBuildTest(unittest.TestCase):
             def render(command, cwd, **kwargs):
                 Path(cwd, 'preview-1.png').write_bytes(b'new page one')
                 return subprocess.CompletedProcess(command, 0, b'', b'')
-            with patch('generators.run_tool', side_effect=render):
+            with patch('jobweaver.generators.run_tool', side_effect=render):
                 self.assertEqual(generators.convert_pdf_to_images(str(pdf), temp, 'preview'), ['preview-1.png'])
             self.assertEqual(Path(temp, 'preview-1.png').read_bytes(), b'new page one')
             self.assertFalse(Path(temp, 'preview-2.png').exists())

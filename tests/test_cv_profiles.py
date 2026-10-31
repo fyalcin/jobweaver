@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-import cv_profiles
-from cv_profiles import (
+from jobweaver import cv_profiles
+from jobweaver.cv_profiles import (
     PROFILES,
     select_cv_profile,
     profile_template,

@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 import unittest
 
-from ui_preferences import RETIRED_THEMES, VALID_THEMES
+from jobweaver.ui_preferences import RETIRED_THEMES, VALID_THEMES
 
 REPO = Path(__file__).resolve().parents[1]
 

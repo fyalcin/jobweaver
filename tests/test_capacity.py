@@ -11,11 +11,11 @@ import time
 import unittest
 from unittest.mock import patch
 
-import capacity
-import db
-import generators
-import model_transport as mt
-from operation_budget import (Budget, Limits, scope, OperationBusy, OperationCancelled, OperationDeadline,
+from jobweaver import capacity
+from jobweaver import db
+from jobweaver import generators
+from jobweaver import model_transport as mt
+from jobweaver.operation_budget import (Budget, Limits, scope, OperationBusy, OperationCancelled, OperationDeadline,
                               OperationTerminated)
 
 
@@ -103,7 +103,7 @@ class CapacityTest(unittest.TestCase):
         for lease in won: lease.close()
 
     def test_two_real_processes_contend(self):
-        code = ('import sys, capacity\n'
+        code = ('import sys; from jobweaver import capacity\n'
                 'held = [capacity.acquire("model", data_dir=sys.argv[1], wait=0) for _ in range(3)]\n'
                 'print("ready", flush=True)\nsys.stdin.read()\n')
         child = subprocess.Popen([sys.executable, '-c', code, str(self.root)], stdin=subprocess.PIPE,
@@ -212,7 +212,7 @@ class CapacityTest(unittest.TestCase):
 
     def test_real_helper_entry_arms_deadline_before_importing_requests(self):
         started = time.monotonic()
-        helper = subprocess.Popen([sys.executable, mt.__file__, '--worker'], stdin=subprocess.PIPE,
+        helper = subprocess.Popen([sys.executable, '-m', 'jobweaver.model_transport', '--worker'], stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         helper.stdin.write(b'0.3\n')
         helper.stdin.flush()  # The envelope never arrives; only the helper's own alarm ends it.
@@ -233,10 +233,10 @@ class Probe(importlib.abc.MetaPathFinder):
 assert 'requests' not in sys.modules
 sys.meta_path.insert(0, Probe())
 signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
-sys.argv = [sys.argv[1], '--worker']
-runpy.run_path(sys.argv[0], run_name='__main__')
+sys.argv = ['model_transport', '--worker']
+runpy.run_module('jobweaver.model_transport', run_name='__main__')
 '''
-        result = subprocess.run([sys.executable, '-c', probe, mt.__file__], input=b'5\n{}', capture_output=True, timeout=20)
+        result = subprocess.run([sys.executable, '-c', probe], input=b'5\n{}', capture_output=True, timeout=20)
         report = [line for line in result.stderr.decode().splitlines() if line.startswith('itimer=')]
         self.assertTrue(report, result.stderr)
         itimer, blocked = report[0].split()
@@ -270,7 +270,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             for lease in leases: lease.close()
 
     def test_busy_maps_to_service_unavailable_with_retry_after(self):
-        import server
+        from jobweaver import server
         response = asyncio.run(server.operation_terminal_response(None, OperationBusy('busy')))
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.headers['Retry-After'], '5')
@@ -279,15 +279,16 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         marker = Path(self.temp.name, 'helper.pid')
         parent = r'''
 import subprocess, sys
-import db
+from jobweaver import db
 db.set_db_path(sys.argv[1] + '/test.db')
 db.init_db()
 owner = db.create_user('helper-owner', password_hash='fictional')['id']
-import model_transport as mt
-from operation_budget import Budget, Limits, scope
+from jobweaver import model_transport as mt
+from jobweaver.operation_budget import Budget, Limits, scope
 mt._HELPER_GRACE = .5
 code = """
-import os, time, requests, model_transport as mt
+import os, time, requests
+from jobweaver import model_transport as mt
 class Session:
     trust_env = True
     def __enter__(self): return self

@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
-import db
-from generators import research_company_sonar
-from server import app
+from jobweaver import db
+from jobweaver.generators import research_company_sonar
+from jobweaver.server import app
 from fastapi.testclient import TestClient
 
 
@@ -21,7 +21,7 @@ class TestSonarResearch(unittest.TestCase):
 
         self.user = db.create_user("testuser", "password123")
         self.user_id = self.user["id"]
-        from server import get_current_user
+        from jobweaver.server import get_current_user
         app.dependency_overrides[get_current_user] = lambda: {"id": self.user_id, "username": "testuser"}
         self.client = TestClient(app)
 
@@ -29,7 +29,7 @@ class TestSonarResearch(unittest.TestCase):
         app.dependency_overrides.clear()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    @patch("generators.run_ai_prompt")
+    @patch("jobweaver.generators.run_ai_prompt")
     def test_research_company_sonar_prompt_and_model(self, mock_ai_prompt):
         mock_ai_prompt.return_value = "## 1. Overview\nAcme Corp makes widgets."
 
@@ -52,7 +52,7 @@ class TestSonarResearch(unittest.TestCase):
             research_company_sonar(company="   ")
 
 
-    @patch("server.research_company_sonar")
+    @patch("jobweaver.server.research_company_sonar")
     def test_research_endpoint_persists_to_db(self, mock_sonar):
         mock_sonar.return_value = "## 1. Overview\nCloud-native logistics software."
 

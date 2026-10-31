@@ -130,16 +130,17 @@ try {
   const fixture = `
 import os, sys
 from pathlib import Path
-from demo_data import seed
+from jobweaver.demo_data import seed
 seed(Path(os.environ['JOBWEAVER_DATA_DIR']))
-import requests, urllib.request, safe_fetch
+import requests, urllib.request
+from jobweaver import safe_fetch
 def denied(*args, **kwargs):
     raise RuntimeError('Outbound HTTP disabled in disposable media fixture')
 requests.sessions.Session.send = denied
 urllib.request.urlopen = denied
 safe_fetch.fetch_page = denied
 import uvicorn
-uvicorn.run('server:app', host='127.0.0.1', port=int(sys.argv[1]))
+uvicorn.run('jobweaver.server:app', host='127.0.0.1', port=int(sys.argv[1]))
 `;
   try {
     await withServer(port => ['-c', fixture, String(port)], { JOBWEAVER_DATA_DIR: data }, base => record(browser, base, 'cv-studio', async ({ page, context, hold, replace }) => {

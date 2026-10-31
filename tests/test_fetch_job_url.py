@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-import safe_fetch
-import server
+from jobweaver import safe_fetch
+from jobweaver import server
 
 
 class Page:
@@ -22,7 +22,7 @@ USER = {"id": 1, "username": "synthetic"}
 
 class FetchJobUrlTest(unittest.TestCase):
     def fetch(self, html, url="https://jobs.example.org/1"):
-        with patch("safe_fetch.fetch_page", return_value=Page(html)):
+        with patch("jobweaver.safe_fetch.fetch_page", return_value=Page(html)):
             return server.fetch_job_url(server.FetchJobUrlRequest(url=url), user=USER)
 
     def test_json_ld_is_read_first(self):

@@ -16,7 +16,7 @@ from pathlib import Path
 import stat
 import time
 
-from operation_budget import current, OperationBusy, OperationTerminated
+from jobweaver.operation_budget import current, OperationBusy, OperationTerminated
 
 # Common to all processes: a per-process setting could silently exceed the ceiling.
 SLOTS = {'model': 4, 'native': 2}
@@ -55,7 +55,7 @@ class Lease:
 def directory(data_dir=None):
     """Resolve lazily so `db.set_db_path`, JOBWEAVER_DATA_DIR and symlinks apply."""
     if data_dir is None:
-        import db
+        from jobweaver import db
         base = Path(db.DB_PATH).resolve().parent
     else:
         base = Path(data_dir).resolve()

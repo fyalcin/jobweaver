@@ -10,7 +10,7 @@ dev:
 		set -e -m; \
 		cleanup() { kill -- -$$backend_pid -$$frontend_pid 2>/dev/null || true; wait 2>/dev/null || true; }; \
 		trap cleanup INT TERM EXIT; \
-		(uv run python server.py 2>&1 | sed "s/^/[backend] /") & \
+		(uv run python -m jobweaver.server 2>&1 | sed "s/^/[backend] /") & \
 		backend_pid=$$!; \
 		( cd webapp && npm run dev 2>&1 | sed "s/^/[frontend] /" ) & \
 		frontend_pid=$$!; \

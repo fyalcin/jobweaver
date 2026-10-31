@@ -9,13 +9,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import db
+from jobweaver import db
 
 _TMP = tempfile.mkdtemp(prefix="gj-feeds-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import company_feeds as cf  # noqa: E402
-import scrapers  # noqa: E402
+from jobweaver import company_feeds as cf  # noqa: E402
+from jobweaver import scrapers  # noqa: E402
 
 FIX = Path(__file__).parent / "fixtures" / "company_feeds"
 

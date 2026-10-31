@@ -3,7 +3,7 @@ import datetime as dt
 import math
 import unittest
 
-import postings
+from jobweaver import postings
 
 FULL = {
     "id": "feed_greenhouse_acme_1",

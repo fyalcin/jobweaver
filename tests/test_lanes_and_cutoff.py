@@ -11,13 +11,13 @@ from unittest import mock
 
 import pandas as pd
 
-import db
+from jobweaver import db
 
 _TMP = tempfile.mkdtemp(prefix="gj-lanes-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import daily_scraper  # noqa: E402
-import job_policy  # noqa: E402
+from jobweaver import daily_scraper  # noqa: E402
+from jobweaver import job_policy  # noqa: E402
 
 
 FULL_AD = ("Wir suchen eine:n Python-Entwickler:in in Wien. Deine Aufgaben: Datenpipelines betreuen. "

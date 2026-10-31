@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from mcp import Client
 
-import jobweaver_mcp as jm
+from jobweaver import jobweaver_mcp as jm
 
 JOBS = [
     {"id": "a", "title": "Data Engineer", "company": "Acme", "status": "new", "match_score": None, "match_rating": "Great",

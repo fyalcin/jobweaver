@@ -7,7 +7,7 @@ the shared slots in `capacity.py`.
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from contextvars import copy_context
-from operation_budget import scope, check
+from jobweaver.operation_budget import scope, check
 from dataclasses import dataclass
 import fcntl
 import hashlib
@@ -17,7 +17,7 @@ from pathlib import Path
 import threading
 import uuid
 
-import db
+from jobweaver import db
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class _Operation:
 
 def _prune_usage_ledger():
     """Usage ledger retention (400 days). A busy ledger never blocks backend startup."""
-    import model_usage
+    from jobweaver import model_usage
     import sqlite3
     try:
         model_usage.prune()

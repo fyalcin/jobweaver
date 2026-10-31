@@ -1,11 +1,11 @@
 """manage_users.py — CLI for managing Jobweaver user accounts.
 
 Usage:
-    uv run python manage_users.py add <username> [--display-name "Name"]
-    uv run python manage_users.py passwd <username>
-    uv run python manage_users.py list
-    uv run python manage_users.py quota <username> [--attempts N] [--output-tokens N] [--default]
-    uv run python manage_users.py usage [<username>] [--day YYYY-MM-DD]
+    uv run python -m jobweaver.manage_users add <username> [--display-name "Name"]
+    uv run python -m jobweaver.manage_users passwd <username>
+    uv run python -m jobweaver.manage_users list
+    uv run python -m jobweaver.manage_users quota <username> [--attempts N] [--output-tokens N] [--default]
+    uv run python -m jobweaver.manage_users usage [<username>] [--day YYYY-MM-DD]
 
 Quotas limit model requests and requested output tokens per User and quota day
 (JOBWEAVER_QUOTA_TZ). They are not a monetary ceiling.
@@ -17,9 +17,9 @@ import sys
 
 from dotenv import load_dotenv
 
-import auth
-import db
-import model_usage
+from jobweaver import auth
+from jobweaver import db
+from jobweaver import model_usage
 
 
 def cmd_add(args) -> int:
@@ -40,7 +40,7 @@ def cmd_add(args) -> int:
     except ValueError as e:
         print(f"Error: {e}")
         return 1
-    from user_assets import ensure_user_dirs
+    from jobweaver.user_assets import ensure_user_dirs
     ensure_user_dirs(user["username"])
     print(f"Created user '{user['username']}' (id={user['id']}) with profile directory profiles/{user['username']}/")
     print("Add their CV as profiles/%s/CV-plaintext.txt (and optionally their own scraper_config.json / templates)." % user["username"])
@@ -154,7 +154,7 @@ def cmd_usage(args) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Manage Jobweaver users")
+    parser = argparse.ArgumentParser(prog="python -m jobweaver.manage_users", description="Manage Jobweaver users")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_add = sub.add_parser("add", help="Create a new user")

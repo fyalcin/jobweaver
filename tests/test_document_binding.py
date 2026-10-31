@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
-import server
-import user_assets
-from document_artifacts import record_build, matching_build, decode_pdf
+from jobweaver import server
+from jobweaver import user_assets
+from jobweaver.document_artifacts import record_build, matching_build, decode_pdf
 from pdf_fixture import pdf_bytes
 
 
@@ -19,7 +19,7 @@ class DocumentBindingTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.user = {'id': 1, 'username': 'synthetic'}
-        job = patch('server.db.get_job_by_id', return_value={'id': 'one', 'company': 'Synthetic'})
+        job = patch('jobweaver.server.db.get_job_by_id', return_value={'id': 'one', 'company': 'Synthetic'})
         job.start()
         self.addCleanup(job.stop)
         self.draft = Path(user_assets.user_drafts_dir('synthetic'), 'Synthetic_one')
@@ -44,7 +44,7 @@ class DocumentBindingTest(unittest.TestCase):
         out = Path(user_assets.user_outputs_dir('synthetic'), 'Synthetic_one')
         bundle = out / 'revisions' / response['revision']
         manifest = json.loads((bundle / 'manifest.json').read_text())
-        self.assertEqual(manifest['cv']['source_hash'], __import__('document_artifacts').digest(self.source))
+        self.assertEqual(manifest['cv']['source_hash'], __import__('jobweaver.document_artifacts', fromlist=['digest']).digest(self.source))
         self.assertEqual((bundle / 'cv_one.tex').read_text(), self.source)
         self.assertEqual((bundle / 'CV-Synthetic.pdf').read_bytes(), pdf_bytes())
 

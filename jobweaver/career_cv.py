@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """Render a CV from a career record (ADR-0004, build step 3).
 
-    uv run python career_cv.py RECORD --family ROLE_FAMILY [--language en|de] [--out cv.tex]
+    uv run python -m jobweaver.career_cv RECORD --family ROLE_FAMILY [--language en|de] [--out cv.tex]
 
 The layout is `base-cv-tex/career-record-cv.tex` (no facts in it). The CV shows the record's name, the role
 family's headline, the header facts (`location`, `phone`, `email`, `github`, `linkedin`, `permit`), every CV
 claim in record order (plus claims whose `cv` names this role family), and the `languages` fact. Only the
 headline and family-specific claims differ between role families. `**text**` in the record prints in bold.
-The record must pass `career_record.py check` first; rendering refuses a record with errors.
+The record must pass `python -m jobweaver.career_record check` first; rendering refuses a record with errors.
 """
 import argparse
 import re
 import sys
 from pathlib import Path
 
-import career_record
+from jobweaver import PROJECT_ROOT
+from jobweaver import career_record
 
-TEMPLATE = Path(__file__).resolve().parent / 'base-cv-tex' / 'career-record-cv.tex'
+TEMPLATE = PROJECT_ROOT / 'base-cv-tex' / 'career-record-cv.tex'
 PAGE_ONE = (('other', None), ('skills', 'skills'), ('role', 'experience'))
 PAGE_TWO = (('project', 'software'), ('contribution', 'contributions'), ('education', 'education'),
             ('publication', 'publications'))
@@ -153,7 +154,7 @@ def render(record, family_id, language='en'):
 
     language='de' needs German wording for everything this CV shows (ValueError lists what is missing).
     """
-    import career_record
+    from jobweaver import career_record
     _family(record, family_id)
     record = career_record.localise(record, language, cv_family=family_id)
     labels = LABELS[language]
@@ -172,7 +173,7 @@ def render(record, family_id, language='en'):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog="python -m jobweaver.career_cv", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('record')
     parser.add_argument('--family', required=True)
     parser.add_argument('--language', default='en', choices=('en', 'de'))
@@ -182,7 +183,7 @@ def main(argv=None):
     if errors:
         for problem in errors:
             print(f'{args.record}:{problem.line}: {problem.message}', file=sys.stderr)
-        print('the career record has errors; run career_record.py check first', file=sys.stderr)
+        print('the career record has errors; run python -m jobweaver.career_record check first', file=sys.stderr)
         return 1
     record, _ = career_record.load(args.record)
     try:

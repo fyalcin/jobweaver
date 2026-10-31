@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest import mock
 
-import scrapers
+from jobweaver import scrapers
 
 
 class StructuredJobExtractionTest(unittest.TestCase):
@@ -45,7 +45,7 @@ class StructuredJobExtractionTest(unittest.TestCase):
             }
         })
 
-        with mock.patch("scrapers.run_ai_prompt", return_value=fake_ai_output):
+        with mock.patch("jobweaver.scrapers.run_ai_prompt", return_value=fake_ai_output):
             res = scrapers.process_job_with_ai("Python required. Test job description", cv_text="Python experience")
 
         self.assertEqual(res["german_level"], "B1")
@@ -74,7 +74,7 @@ class StructuredJobExtractionTest(unittest.TestCase):
             "match_checks": []
         })
 
-        with mock.patch("scrapers.run_ai_prompt", return_value=minimal_output):
+        with mock.patch("jobweaver.scrapers.run_ai_prompt", return_value=minimal_output):
             res = scrapers.process_job_with_ai("Python required. Test job description", cv_text="Python experience")
 
         self.assertEqual(res["german_level"], "none")

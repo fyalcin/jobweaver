@@ -121,7 +121,7 @@ class AutoGenerateConfig(BaseModel):
     @classmethod
     def migrate_rating_threshold(cls, value):
         if isinstance(value, dict):
-            from job_policy import normalize_rating_config
+            from jobweaver.job_policy import normalize_rating_config
             return normalize_rating_config({'auto_generate': value})['auto_generate']
         return value
 

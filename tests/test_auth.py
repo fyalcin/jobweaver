@@ -5,8 +5,8 @@ from unittest.mock import patch
 import tempfile
 from pathlib import Path
 
-import auth
-import db
+from jobweaver import auth
+from jobweaver import db
 
 
 class TestPasswordHashing(unittest.TestCase):
@@ -57,7 +57,7 @@ class TestSessionTokens(unittest.TestCase):
 
     def test_expired_token_fails(self):
         token = auth.create_session_token(self.user_id)
-        with patch('auth.time.time', return_value=time.time() + auth.SESSION_TTL_SECONDS + 1):
+        with patch('jobweaver.auth.time.time', return_value=time.time() + auth.SESSION_TTL_SECONDS + 1):
             self.assertIsNone(auth.verify_session_token(token))
 
     def test_garbage_tokens_fail(self):

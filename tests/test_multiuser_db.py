@@ -2,7 +2,7 @@ import shutil
 import tempfile
 import unittest
 
-import db
+from jobweaver import db
 
 
 class MultiUserDBTestBase(unittest.TestCase):

@@ -27,8 +27,8 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from auth import SESSION_COOKIE_NAME, create_session_token
-from db import get_user_by_username, init_db
+from jobweaver.auth import SESSION_COOKIE_NAME, create_session_token
+from jobweaver.db import get_user_by_username, init_db
 
 
 def resolve_user_id(username: str) -> int:

@@ -5,7 +5,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-import generators as g
+from jobweaver import generators as g
 
 SCHEMA = {"type": "json_schema", "json_schema": {"name": "x", "schema": {"type": "object"}}}
 ENV = {"CUSTOM_MODEL_BASE_URL": "http://127.0.0.1:11434/v1/", "CUSTOM_MODEL_API_KEY": ""}
@@ -128,17 +128,17 @@ class OpenRouterMessageTest(unittest.TestCase):
 
 class SettingsModelListTest(unittest.TestCase):
     def test_custom_models_show_even_when_openrouter_is_unreachable(self):
-        import server
+        from jobweaver import server
         with patch("urllib.request.urlopen", side_effect=OSError("offline")), \
-             patch("server.list_custom_models", return_value=[{"id": "custom/llama3.1:8b", "name": "x", "context_length": None}]):
+             patch("jobweaver.server.list_custom_models", return_value=[{"id": "custom/llama3.1:8b", "name": "x", "context_length": None}]):
             result = server.get_openrouter_models()
         self.assertTrue(result["success"])
         self.assertEqual([m["id"] for m in result["models"]], ["custom/llama3.1:8b"])
 
     def test_nothing_reachable_reports_the_error(self):
-        import server
+        from jobweaver import server
         with patch("urllib.request.urlopen", side_effect=OSError("offline")), \
-             patch("server.list_custom_models", return_value=[]):
+             patch("jobweaver.server.list_custom_models", return_value=[]):
             result = server.get_openrouter_models()
         self.assertFalse(result["success"])
         self.assertIn("offline", result["error"])

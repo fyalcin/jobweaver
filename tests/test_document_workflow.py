@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
-import reviewed_documents
-import server
-import user_assets
+from jobweaver import reviewed_documents
+from jobweaver import server
+from jobweaver import user_assets
 
 
 @unittest.skipUnless(shutil.which('pdflatex') and shutil.which('pdfinfo') and shutil.which('pdftoppm'),
@@ -25,8 +25,8 @@ class DocumentWorkflowTest(unittest.TestCase):
             store = reviewed_documents.evidence('synthetic', cv)
             ids = list(store['facts'])
             job = {'id': 'one', 'company': 'Synthetic', 'title': 'Research Software Engineer', 'description': 'Python'}
-            with patch('server.db.get_job_by_id', return_value=job), patch(
-                    'generators.run_ai_prompt', return_value=json.dumps({'fact_ids': ids})) as model:
+            with patch('jobweaver.server.db.get_job_by_id', return_value=job), patch(
+                    'jobweaver.generators.run_ai_prompt', return_value=json.dumps({'fact_ids': ids})) as model:
                 response = server.generate_cv(server.GenerateRequest(job_id='one', modelName='mock', engine='latex'), user=user)
                 self.assertIn('/revisions/', response['download_url'])
                 self.assertEqual(model.call_count, 0)  # every approved bullet is kept; no selection call

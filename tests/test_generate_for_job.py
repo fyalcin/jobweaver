@@ -11,16 +11,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import db
+from jobweaver import db
 
 # Point db at a throwaway SQLite file BEFORE importing anything that opens it.
 _TMP = tempfile.mkdtemp(prefix="gj-cli-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import daily_scraper  # noqa: E402
-import generate_for_job  # noqa: E402
-import reviewed_documents  # noqa: E402
-import user_assets  # noqa: E402
+from jobweaver import daily_scraper  # noqa: E402
+from jobweaver import generate_for_job  # noqa: E402
+from jobweaver import reviewed_documents  # noqa: E402
+from jobweaver import user_assets  # noqa: E402
 
 CV = 'Synthetic Applicant\nEXPERIENCE\nResearch lab | 2020-2024\n- Used Python for simulations.\n- Learning SQL basics.'
 FILLER = ' The work required careful checks of every result before anyone else relied on it.'
@@ -87,7 +87,7 @@ class GenerateForJobTest(unittest.TestCase):
         self.noisy = False
         self.letters = []  # answers for letter requests, consumed in order; the last one repeats
         self.cv_answer = {'fact_ids': list(self.store['facts'])}
-        patcher = patch('generators.run_ai_prompt', side_effect=self._model)
+        patcher = patch('jobweaver.generators.run_ai_prompt', side_effect=self._model)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.job_id = 'li_9' + str(time.time_ns())[-8:]
@@ -249,7 +249,7 @@ class GenerateForJobTest(unittest.TestCase):
             time.sleep(0.3)
             return slow(prompt, **kwargs)
 
-        with patch('generators.run_ai_prompt', side_effect=slow_model):
+        with patch('jobweaver.generators.run_ai_prompt', side_effect=slow_model):
             threads = [threading.Thread(target=work) for _ in range(2)]
             for thread in threads:
                 thread.start()
@@ -263,8 +263,8 @@ class GenerateForJobTest(unittest.TestCase):
     # --- failure ---------------------------------------------------------------------------------
 
     def test_terminal_letter_failure_removes_atomic_cv_bundle(self):
-        from operation_budget import OperationExhausted
-        with patch('generators.run_ai_prompt', side_effect=OperationExhausted('Operation allowance exhausted')):
+        from jobweaver.operation_budget import OperationExhausted
+        with patch('jobweaver.generators.run_ai_prompt', side_effect=OperationExhausted('Operation allowance exhausted')):
             result, code = self.cli()
         self.assertEqual(code, 1)
         self.assertFalse(result['ok'])

@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 _TMP = tempfile.mkdtemp(prefix="gj-prefs-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import user_assets  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import user_assets  # noqa: E402
 
 
 def setUpModule():
@@ -99,7 +99,7 @@ class UiPreferencesTest(unittest.TestCase):
                 self.assertEqual(saved.read(), original)
 
     def test_supported_themes_and_dark_toggle_persist(self):
-        from ui_preferences import VALID_THEMES, RETIRED_THEMES
+        from jobweaver.ui_preferences import VALID_THEMES, RETIRED_THEMES
         for theme in VALID_THEMES:
             payload = server.UiPreferencesPayload(theme=theme, font="fira-sans")
             server.update_ui_preferences(body=payload, user=self._user1())

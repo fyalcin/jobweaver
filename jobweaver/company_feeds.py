@@ -20,10 +20,10 @@ from email.utils import parsedate_to_datetime
 from typing import Callable, Iterable, Optional
 from urllib.parse import quote, quote_plus
 
-from postings import html_to_text, to_posting
-from user_assets import resolve_user_path
-from safe_fetch import fetch_page, JSON_TYPES, XML_TYPES, UnsafeURL
-from input_limits import ShortText
+from jobweaver.postings import html_to_text, to_posting
+from jobweaver.user_assets import resolve_user_path
+from jobweaver.safe_fetch import fetch_page, JSON_TYPES, XML_TYPES, UnsafeURL
+from jobweaver.input_limits import ShortText
 from pydantic import TypeAdapter, ValidationError
 
 logger = logging.getLogger(__name__)

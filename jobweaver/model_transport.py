@@ -14,13 +14,13 @@ import base64
 import json
 import math
 import os
-from pathlib import Path
 import selectors
 import signal
 import subprocess
 import sys
 
-from operation_budget import current, operation, OperationTerminated, OperationExhausted, AttributionError
+from jobweaver import PROJECT_ROOT
+from jobweaver.operation_budget import current, operation, OperationTerminated, OperationExhausted, AttributionError
 
 # Private seams for explicitly injected test fixtures (`tests/model_transport_fixture.py`).
 # Production stays exec-only, records every POST in the durable ledger and refuses
@@ -64,7 +64,7 @@ def post_json(url, *, headers, json, timeout=300, label='model'):
                             timeout=min(timeout, budget.remaining()), limit=budget.limits.response_per_call))
     if len(envelope) > _MAX_ENVELOPE:
         raise OperationExhausted('Model request envelope exceeds transport limit.')
-    import capacity
+    from jobweaver import capacity
     ledger = _ledger if _ledger is not None else _usage_ledger()
     call = response = result = None
     try:
@@ -108,8 +108,8 @@ def post_json(url, *, headers, json, timeout=300, label='model'):
 
 
 def _usage_ledger():
-    # Lazy and parent-only: the helper runs this file as a script and never loads db or dotenv.
-    import model_usage
+    # Lazy and parent-only: the helper runs this module on its own and never loads db or dotenv.
+    from jobweaver import model_usage
     return model_usage
 
 
@@ -122,9 +122,9 @@ def _supervise(envelope, budget, lease):
                    if key in ('PATH', 'SYSTEMROOT', 'WINDIR', 'PYTHONPATH', 'PYTHONDONTWRITEBYTECODE')}
     environment['PYTHON_DOTENV_DISABLED'] = '1'
     output, errors = bytearray(), bytearray()
-    process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--worker'],
+    process = subprocess.Popen([sys.executable, '-m', 'jobweaver.model_transport', '--worker'],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               env=environment, pass_fds=(lease.fileno(),))
+                               cwd=PROJECT_ROOT, env=environment, pass_fds=(lease.fileno(),))
     try:
         with selectors.DefaultSelector() as selector:
             for pipe, event in ((process.stdin, selectors.EVENT_WRITE), (process.stdout, selectors.EVENT_READ),

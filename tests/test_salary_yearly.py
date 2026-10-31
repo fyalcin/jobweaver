@@ -3,8 +3,8 @@ import unittest
 from datetime import date
 from unittest import mock
 
-import salary
-import scrapers
+from jobweaver import salary
+from jobweaver import scrapers
 
 
 class SalaryYearlyEurTest(unittest.TestCase):

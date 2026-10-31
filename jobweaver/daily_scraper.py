@@ -1,11 +1,11 @@
-from operation_budget import operation, check, OperationTerminated, QuotaExceeded
+from jobweaver.operation_budget import operation, check, OperationTerminated, QuotaExceeded
 import os
-from job_policy import qualifies, fingerprint, normalize_rating_config, apply_rating
+from jobweaver.job_policy import qualifies, fingerprint, normalize_rating_config, apply_rating
 import sys
 import json
 import logging
 import argparse
-from input_limits import validate_collection_config, validate_daily_overrides
+from jobweaver.input_limits import validate_collection_config, validate_daily_overrides
 import shutil
 from datetime import datetime
 import pandas as pd
@@ -13,15 +13,13 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-import db
-import demo_mode
-from scrapers import scrape_new_jobs, ScrapeParams, retry_failed_analyses
-from generators import write_latex, compile_latex, resolve_scrape_model
-from cv_profiles import select_cv_profile, normalize_profile
-from german import german_level_compatible, normalize_german_level
-from user_assets import resolve_user_path, user_outputs_dir, user_drafts_dir, ensure_user_dirs, load_effective_cv, user_profile_dir
+from jobweaver import db
+from jobweaver import demo_mode
+from jobweaver.scrapers import scrape_new_jobs, ScrapeParams, retry_failed_analyses
+from jobweaver.generators import write_latex, compile_latex, resolve_scrape_model
+from jobweaver.cv_profiles import select_cv_profile, normalize_profile
+from jobweaver.german import german_level_compatible, normalize_german_level
+from jobweaver.user_assets import resolve_user_path, user_outputs_dir, user_drafts_dir, ensure_user_dirs, load_effective_cv, user_profile_dir
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,9 +62,9 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
     from pathlib import Path
     import uuid
     import json
-    from document_artifacts import atomic_write, document_lock, matching_build, select_source
-    from reviewed_documents import generate
-    from generators import run_ai_prompt, compile_typst
+    from jobweaver.document_artifacts import atomic_write, document_lock, matching_build, select_source
+    from jobweaver.reviewed_documents import generate
+    from jobweaver.generators import run_ai_prompt, compile_typst
     username = user.get('username')
     config = load_config(username)
     auto = config.get('auto_generate', {})
@@ -96,7 +94,7 @@ def _generate_docs_for_job(job: dict, model_name: str, tone: str, cv_text: str, 
                 filename = f'{prefix}_{safe_id}.' + ('tex' if engine == 'latex' else 'typ')
                 atomic_write(draft / filename, source)
                 select_source(draft, prefix, safe_id, 'tex' if engine == 'latex' else 'typ')
-                atomic_write(draft / 'history' / (__import__('document_artifacts').digest(source) + '.' + engine), source)
+                atomic_write(draft / 'history' / (__import__('jobweaver.document_artifacts', fromlist=['digest']).digest(source) + '.' + engine), source)
                 pdfname = f'{prefix}_draft_{safe_id}.pdf'
                 published_name = f'CV-{company}.pdf' if kind == 'cv' else f'Letter-{company}.pdf'
                 if engine == 'latex':
@@ -160,7 +158,7 @@ def run_daily_scraping(linkedin_limit: int = None, karriere_limit: int = None,
     if demo_mode.enabled():
         logger.error(demo_mode.MESSAGE)
         return
-    import model_usage
+    from jobweaver import model_usage
     model_usage.settings()  # Invalid quota settings stop the run before any User starts.
     logger.info("Starting daily job scraping routine.")
     users = db.list_users()
@@ -172,7 +170,7 @@ def run_daily_scraping(linkedin_limit: int = None, karriere_limit: int = None,
             logger.error(f"No user named {user_filter!r} — aborting.")
             return
     if not users:
-        logger.error("No users found — run manage_users.py to create one.")
+        logger.error("No users found — run python -m jobweaver.manage_users to create one.")
         return
     for user in users:
         try:
@@ -332,7 +330,7 @@ def _run_daily_for_user(user: dict, linkedin_limit: int = None, karriere_limit: 
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Daily Job Scraper")
+    parser = argparse.ArgumentParser(prog="python -m jobweaver.daily_scraper", description="Daily Job Scraper")
     parser.add_argument("--linkedin-limit", type=int, default=None)
     parser.add_argument("--karriere-limit", type=int, default=None)
     parser.add_argument("--keywords", default=None,

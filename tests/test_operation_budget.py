@@ -11,11 +11,11 @@ import time
 import unittest
 from unittest.mock import patch
 
-import generators
-import model_transport as mt
-from operation_budget import (Budget, Limits, scope, current, OperationCancelled,
+from jobweaver import generators
+from jobweaver import model_transport as mt
+from jobweaver.operation_budget import (Budget, Limits, scope, current, OperationCancelled,
                               OperationDeadline, OperationExhausted, OperationTerminated)
-from background_queue import bounded_results
+from jobweaver.background_queue import bounded_results
 from model_transport_fixture import inline_transport, fictional_ledger
 
 
@@ -134,7 +134,7 @@ class AllowanceTest(unittest.TestCase):
         with self.assertRaises(OperationDeadline): budget(seconds=.05).wait(10)
 
     def test_provider_retry_wait_obeys_operation_deadline(self):
-        with scope(budget=budget(seconds=.05)), patch('generators.openrouter_api', side_effect=RuntimeError('busy')) as post:
+        with scope(budget=budget(seconds=.05)), patch('jobweaver.generators.openrouter_api', side_effect=RuntimeError('busy')) as post:
             with self.assertRaises(OperationDeadline): generators.run_ai_prompt('x')
         self.assertEqual(post.call_count, 1)
 
@@ -158,13 +158,13 @@ class AllowanceTest(unittest.TestCase):
         self.assertNotIn(key[:10], str(error.exception))
 
     def test_ambiguous_transport_error_is_not_retried(self):
-        with patch('generators.openrouter_api', side_effect=mt.ModelTransportError('unknown')) as post:
+        with patch('jobweaver.generators.openrouter_api', side_effect=mt.ModelTransportError('unknown')) as post:
             with self.assertRaises(mt.ModelTransportError): generators.run_ai_prompt('x')
         self.assertEqual(post.call_count, 1)
 
     def test_document_and_cli_lock_waits_obey_absolute_deadline(self):
-        from document_artifacts import document_lock
-        import generate_for_job
+        from jobweaver.document_artifacts import document_lock
+        from jobweaver import generate_for_job
         import fcntl
         entered, release = threading.Event(), threading.Event()
         with tempfile.TemporaryDirectory() as folder:
@@ -188,7 +188,7 @@ class AllowanceTest(unittest.TestCase):
                     with generate_for_job.job_lock(path): self.fail('CLI lock acquired after deadline')
 
     def test_injected_document_writer_and_verifier_share_scope(self):
-        import reviewed_documents as rd
+        from jobweaver import reviewed_documents as rd
         shared = budget(attempts=1)
         seen = []
         def run_prompt(*args, **kwargs):
@@ -227,7 +227,8 @@ class RealHelperTest(unittest.TestCase):
                 self.assertIsNotNone(children[0].poll(), 'helper must be reaped before unwinding')
 
     PRIMITIVES = '''
-import model_transport as mt, requests, io, time
+import requests, io, time
+from jobweaver import model_transport as mt
 class Response:
     status_code = STATUS
     headers = HEADERS
@@ -312,7 +313,8 @@ mt._worker()
             thread.start()
             port = server.server_address[1]
             code = f'''
-import socket, _socket, model_transport as mt
+import socket, _socket
+from jobweaver import model_transport as mt
 blocked = socket.socket.connect
 def connect(self, address):
     if address == ('127.0.0.1', {port}): return _socket.socket.connect(self, address)
@@ -337,14 +339,14 @@ mt._worker()
 
 class EntrypointTest(unittest.TestCase):
     def setUp(self):
-        import db
+        from jobweaver import db
         self.db = db
         self.previous = db.DB_PATH
         self.temp = tempfile.TemporaryDirectory()
         db.set_db_path(str(Path(self.temp.name, 'test.db')))
         db.init_db()
         self.user = db.create_user('budget-user', password_hash='fictional')
-        import server
+        from jobweaver import server
         self.server = server
 
     def tearDown(self):
@@ -382,7 +384,7 @@ class EntrypointTest(unittest.TestCase):
             self.assertIs(current(), shared)
             raise OperationExhausted('stop')
         self.db.upsert_job({'id': 'a', 'company': 'Example', 'description': 'D'}, user_id=self.user['id'])
-        with scope(budget=shared), patch('reviewed_documents.generate', side_effect=generate), \
+        with scope(budget=shared), patch('jobweaver.reviewed_documents.generate', side_effect=generate), \
                 patch.object(self.server, 'load_cv_text', return_value='CV'), \
                 patch.object(self.server, 'compile_job_document') as compile_doc, \
                 patch.object(self.server, 'finalize_job_documents') as publish:
@@ -392,7 +394,7 @@ class EntrypointTest(unittest.TestCase):
         publish.assert_not_called()
 
     def test_daily_all_lanes_and_retry_use_one_scope(self):
-        import daily_scraper as daily
+        from jobweaver import daily_scraper as daily
         seen = []
         def scrape(*args, **kwargs):
             seen.append(current())
@@ -411,7 +413,7 @@ class EntrypointTest(unittest.TestCase):
         self.assertIsNone(current())
 
     def test_daily_terminal_stops_next_lane_and_retry(self):
-        import daily_scraper as daily
+        from jobweaver import daily_scraper as daily
         config = {'daily_scraper': {'enable_karriere': True, 'karriere': {'keywords': ['a', 'b']}}}
         with patch.object(daily, 'load_config', return_value=config), patch.object(daily, 'load_effective_cv', return_value='CV'), \
                 patch.object(daily, 'scrape_new_jobs', side_effect=OperationExhausted('stop')) as scrape, \
@@ -421,7 +423,7 @@ class EntrypointTest(unittest.TestCase):
         retry.assert_not_called()
 
     def test_cli_scope_includes_job_lookup_before_generation(self):
-        import generate_for_job
+        from jobweaver import generate_for_job
         seen = []
         def lookup(*args):
             seen.append(current())

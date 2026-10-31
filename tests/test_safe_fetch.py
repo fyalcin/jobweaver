@@ -16,8 +16,8 @@ import unittest
 from unittest.mock import patch
 
 import requests
-import safe_fetch as sf
-import company_feeds as cf
+from jobweaver import safe_fetch as sf
+from jobweaver import company_feeds as cf
 
 PUBLIC = "93.184.215.14"
 URL = "http://jobs.example.org/posting"
@@ -210,7 +210,8 @@ class HelperTest(unittest.TestCase):
             # The real worker and parent deadline run unchanged. Substitute only
             # network primitives; no external destination can be contacted.
             code = """
-import safe_fetch as sf, time, io, socket
+import time, io, socket
+from jobweaver import safe_fetch as sf
 phase = PHASE
 class Trickle(io.RawIOBase):
     def readable(self): return True
@@ -286,7 +287,7 @@ sf._worker()
         real_popen = subprocess.Popen
         def launch(command, **kwargs):
             return real_popen([sys.executable, "-c",
-                               "import safe_fetch as sf; sf.time.monotonic = lambda: float('inf'); sf._worker()"], **kwargs)
+                               "from jobweaver import safe_fetch as sf; sf.time.monotonic = lambda: float('inf'); sf._worker()"], **kwargs)
         with patch.object(sf.subprocess, "Popen", side_effect=launch):
             with self.assertRaisesRegex(requests.Timeout, "total deadline"):
                 sf.fetch_page(URL)

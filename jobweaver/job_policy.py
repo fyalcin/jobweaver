@@ -4,7 +4,7 @@ import json
 import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from german import german_level_compatible, normalize_german_level
+from jobweaver.german import german_level_compatible, normalize_german_level
 
 
 class AnalysisPoint(BaseModel):

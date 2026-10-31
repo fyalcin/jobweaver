@@ -4,15 +4,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 # Point db at a throwaway SQLite file BEFORE importing server (server runs
 # db.init_db() at import time).
 _TMP = tempfile.mkdtemp(prefix="gj-cv-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import user_assets  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import user_assets  # noqa: E402
 
 
 def setUpModule():

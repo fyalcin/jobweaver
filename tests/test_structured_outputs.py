@@ -3,8 +3,8 @@ import json
 import unittest
 from unittest import mock
 
-import generators
-import job_policy
+from jobweaver import generators
+from jobweaver import job_policy
 
 
 class RoutingTest(unittest.TestCase):

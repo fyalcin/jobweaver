@@ -4,15 +4,15 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 _TMP = tempfile.mkdtemp(prefix="gj-job-docs-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import user_assets  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import user_assets  # noqa: E402
 from pdf_fixture import pdf_bytes
-from document_artifacts import record_build
+from jobweaver.document_artifacts import record_build
 
 
 def setUpModule():
@@ -68,8 +68,8 @@ class JobDocumentsApiTest(unittest.TestCase):
             document_type="cv",
             tex=r"\documentclass{article}\begin{document}Test CV\end{document}",
         )
-        with mock.patch("server.compile_latex", return_value=(True, "Success")), \
-             mock.patch("server.convert_pdf_to_images", return_value=["cv_img_test_job_101-1.png"]):
+        with mock.patch("jobweaver.server.compile_latex", return_value=(True, "Success")), \
+             mock.patch("jobweaver.server.convert_pdf_to_images", return_value=["cv_img_test_job_101-1.png"]):
             res = server.compile_job_document("test_job_101", req, user=self.user)
 
         # A mocked success without a validated fresh build cannot be accepted.

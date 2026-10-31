@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mark one job as applied from the command line, without the HTTP API.
 
-    uv run python mark_applied.py --user admin --job li_4474888661 [--date 2026-10-12] [--method email]
+    uv run python -m jobweaver.mark_applied --user admin --job li_4474888661 [--date 2026-10-12] [--method email]
 
 For scripts and agents that submit applications elsewhere and record them here. Sets the same fields as the web app's status change:
 `status` "applied", `applied` true and `application_date` (default today), plus
@@ -25,7 +25,7 @@ AFTER_APPLIED = {"applied", "interview", "offer", "rejected"}
 
 
 def mark_applied(username: str, job_id: str, applied_on: str, method: str | None = None) -> dict:
-    import db
+    from jobweaver import db
 
     result = {"job_id": job_id, "changed": False, "previous_status": None, "status": None, "errors": []}
     user = db.get_user_by_username(username)
@@ -54,7 +54,7 @@ def mark_applied(username: str, job_id: str, applied_on: str, method: str | None
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="python -m jobweaver.mark_applied", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--user", required=True)
     ap.add_argument("--job", required=True)
     ap.add_argument("--date", default=date.today().isoformat(), help="application date, YYYY-MM-DD")

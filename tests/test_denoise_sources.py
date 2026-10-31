@@ -5,17 +5,17 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
-import user_assets
+from jobweaver import db
+from jobweaver import user_assets
 
 # Point db at a throwaway SQLite file BEFORE importing server (server runs
 # db.init_db() at import time).
 _TMP = tempfile.mkdtemp(prefix="gj-dn-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import scrapers  # noqa: E402
-import generators  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import scrapers  # noqa: E402
+from jobweaver import generators  # noqa: E402
 
 
 _NOISY_DESCRIPTION = (

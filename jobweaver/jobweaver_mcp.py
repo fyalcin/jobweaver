@@ -11,7 +11,7 @@ Configuration (environment variables, or the command-line options in brackets, w
     JOBWEAVER_PASSWORD_FILE  [--password-file] a file that holds the password (chmod 600). Preferred.
     JOBWEAVER_PASSWORD       the password itself, if no file is given. It then sits in the MCP client's config.
 
-Run: `uv run python jobweaver_mcp.py --username NAME --password-file PATH` (the MCP client starts it and talks
+Run: `uv run python -m jobweaver.jobweaver_mcp --username NAME --password-file PATH` (the MCP client starts it and talks
 over stdin/stdout).
 Logs go to stderr; stdout carries the protocol only.
 """
@@ -27,7 +27,7 @@ import requests
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
-from job_policy import RATINGS, rating_sort_key
+from jobweaver.job_policy import RATINGS, rating_sort_key
 
 STAGES = ("new", "interested", "applied", "interview", "offer", "rejected", "not_interested")
 Stage = Literal["new", "interested", "applied", "interview", "offer", "rejected", "not_interested"]
@@ -138,7 +138,7 @@ class Backend:
 
     @classmethod
     def from_environment(cls, argv: Optional[list] = None) -> "Backend":
-        parser = argparse.ArgumentParser(description="Read-only MCP server for Jobweaver (stdio).")
+        parser = argparse.ArgumentParser(prog="python -m jobweaver.jobweaver_mcp", description="Read-only MCP server for Jobweaver (stdio).")
         parser.add_argument("--url")
         parser.add_argument("--username")
         parser.add_argument("--password-file")

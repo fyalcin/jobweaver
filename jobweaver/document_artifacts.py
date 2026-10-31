@@ -9,8 +9,8 @@ import subprocess
 import tempfile
 import threading
 import uuid
-from compiler_sandbox import run_tool
-from operation_budget import check, current
+from jobweaver.compiler_sandbox import run_tool
+from jobweaver.operation_budget import check, current
 from contextlib import contextmanager
 
 MAX_PDF_BYTES = 12 * 1024 * 1024

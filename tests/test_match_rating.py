@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
-import analysis_validation as validation
-import db
-import scrapers
-import server
-from input_limits import validate_collection_config
-from job_policy import (RATINGS, analysis_current, apply_rating, deduplicate_checks, fingerprint,
+from jobweaver import analysis_validation as validation
+from jobweaver import db
+from jobweaver import scrapers
+from jobweaver import server
+from jobweaver.input_limits import validate_collection_config
+from jobweaver.job_policy import (RATINGS, analysis_current, apply_rating, deduplicate_checks, fingerprint,
                         judgement_calls, match_rating, normalize_rating_config, qualifies, deduplicate_conflicts)
 
 
@@ -88,7 +88,7 @@ class MatchGroundingTest(unittest.TestCase):
     def analyze(self, data, posting='Python required', cv='Python experience'):
         payload = {'german_level':'none', 'german_strength':'none', 'summary':'Fictional role',
                    'match_checks':[], **data}
-        with patch('scrapers.run_ai_prompt', return_value=json.dumps(payload)) as model:
+        with patch('jobweaver.scrapers.run_ai_prompt', return_value=json.dumps(payload)) as model:
             result = scrapers.process_job_with_ai(posting, cv, model_name='mock', denoise=False)
         self.assertEqual(model.call_count, 1)
         return result
@@ -109,7 +109,7 @@ class MatchGroundingTest(unittest.TestCase):
         good = dict(checks('s')[0], posting_quote='Python required', cv_quote='Python experience')
         bad = dict(checks('m')[0], requirement='SQL', posting_quote='Invented SQL requirement')
         payload={'german_level':'none','summary':'Role','match_checks':[good,bad]}
-        with patch('scrapers.run_ai_prompt', return_value=json.dumps(payload)) as model, self.assertRaises(validation.AnalysisValidationError):
+        with patch('jobweaver.scrapers.run_ai_prompt', return_value=json.dumps(payload)) as model, self.assertRaises(validation.AnalysisValidationError):
             scrapers.process_job_with_ai('Python required','Python experience',denoise=False)
         self.assertEqual(model.call_count,2)
         self.assertIn('match_checks.1.posting_quote',model.call_args_list[1].args[0])
@@ -135,7 +135,7 @@ class MatchGroundingTest(unittest.TestCase):
                  {'preference_conflicts': [conflict()] * 33},
                  {'requirements': ['Python required'], 'match_checks': []})
         for changes in cases:
-            with self.subTest(changes=list(changes)), patch('scrapers.run_ai_prompt', return_value=json.dumps({
+            with self.subTest(changes=list(changes)), patch('jobweaver.scrapers.run_ai_prompt', return_value=json.dumps({
                     'german_level': 'none', 'summary': 'Role', 'match_checks': [], **changes})) as model, \
                     self.assertRaises(validation.AnalysisValidationError):
                 scrapers.process_job_with_ai('Python required', 'Python experience', denoise=False)
@@ -148,7 +148,7 @@ class MatchGroundingTest(unittest.TestCase):
         prompt=scrapers._build_analysis_prompt('Python required','CV',False)
         self.assertNotIn('match_score',prompt)
         self.assertNotIn('0 to 100',prompt)
-        with patch('scrapers.run_ai_prompt',return_value=json.dumps({'german_level':'none','summary':'Role','match_score':100})), self.assertRaises(validation.AnalysisValidationError):
+        with patch('jobweaver.scrapers.run_ai_prompt',return_value=json.dumps({'german_level':'none','summary':'Role','match_score':100})), self.assertRaises(validation.AnalysisValidationError):
             scrapers.process_job_with_ai('Python required','CV',denoise=False)
 
 
@@ -203,9 +203,9 @@ class RatingLifecycleTest(unittest.TestCase):
     def test_policy_updates_project_same_evidence_across_list_detail_stats_daily(self):
         self.save(german_level='C1',german_strength='required')
         self.save(id='legacy',analysis_schema=None,match_rating=None,match_score=100)
-        with patch('server.load_cv_text',return_value='CV'), patch('server._effective_ai_model',return_value='mock'), \
-             patch('server.user_outputs_dir',return_value=self.temp.name),patch('server.load_document_engine_config',return_value=('typst','base')):
-            with patch('server.load_user_config_dict',return_value=self.config):
+        with patch('jobweaver.server.load_cv_text',return_value='CV'), patch('jobweaver.server._effective_ai_model',return_value='mock'), \
+             patch('jobweaver.server.user_outputs_dir',return_value=self.temp.name),patch('jobweaver.server.load_document_engine_config',return_value=('typst','base')):
+            with patch('jobweaver.server.load_user_config_dict',return_value=self.config):
                 jobs=server.get_jobs(user=self.user)
                 rated=next(j for j in jobs if j['id']=='rated')
                 self.assertEqual(rated['match_rating'],'Blocked')
@@ -217,7 +217,7 @@ class RatingLifecycleTest(unittest.TestCase):
                 self.assertEqual(server.get_daily_results('2026-10-01',user=self.user)['jobs'],[])
                 self.assertFalse(next(j for j in jobs if j['id']=='legacy')['analysis_current'])
             allowed={'auto_generate':{'min_rating':'good'},'eligibility_policy':{'german_level':'C1'}}
-            with patch('server.load_user_config_dict',return_value=allowed):
+            with patch('jobweaver.server.load_user_config_dict',return_value=allowed):
                 self.assertEqual(server.get_job_detail('rated',user=self.user)['job']['match_rating'],'Great')
                 daily=server.get_daily_results('2026-10-01',user=self.user)['jobs']
                 self.assertEqual([j['id'] for j in daily],['rated'])
@@ -227,7 +227,7 @@ class RatingLifecycleTest(unittest.TestCase):
         self.save(status='interview',application_date='2026-09-30',raw_description='Python required',match_score=90,analysis_schema=None)
         self.save(id='unrelated',processed=0,analysis_state='pending')
         self.save(id='other-user')
-        with patch('server._require_cv'),patch('server._admit_background') as admit:
+        with patch('jobweaver.server._require_cv'),patch('jobweaver.server._admit_background') as admit:
             with self.assertRaises(HTTPException) as error:
                 server.api_reprocess_start(user=self.other,job_id='rated')
             self.assertEqual(error.exception.status_code,404)
@@ -239,7 +239,7 @@ class RatingLifecycleTest(unittest.TestCase):
             db.update_job_fields(job['id'],user_id=user['id'],analysis_schema=2,analysis_state='complete',processed=1,
                                  analysis_fingerprint=self.expected,match_rating='Great',match_checks=checks('sss'),match_score=None)
             return True,None
-        with patch('server.load_cv_text',return_value='CV'),patch('server._effective_ai_model',return_value='mock'),patch('server._scrapers.analyse_stored_job',side_effect=analyze) as model:
+        with patch('jobweaver.server.load_cv_text',return_value='CV'),patch('jobweaver.server._effective_ai_model',return_value='mock'),patch('jobweaver.server._scrapers.analyse_stored_job',side_effect=analyze) as model:
             server._run_reprocess_bg('single-rerate',self.user,job_id='rated')
         self.assertEqual(model.call_count,1)
         self.assertEqual(model.call_args.args[0]['id'],'rated')
@@ -248,14 +248,14 @@ class RatingLifecycleTest(unittest.TestCase):
         self.assertEqual(db.get_job_by_id('unrelated',self.user['id'])['analysis_state'],'pending')
 
     def test_daily_scheduled_qualification_uses_current_rating_and_never_legacy_score(self):
-        import daily_scraper
+        from jobweaver import daily_scraper
         import pandas as pd
         records=[self.record,{**self.record,'id':'legacy','analysis_schema':None,'match_score':100},
                  {**self.record,'id':'stale','analysis_fingerprint':'old'}]
-        with patch('daily_scraper.load_config',return_value=self.config),patch('daily_scraper.load_effective_cv',return_value='CV'), \
-             patch('daily_scraper.resolve_scrape_model',return_value='mock'),patch('daily_scraper.retry_failed_analyses',return_value=(0,0)), \
-             patch('daily_scraper.db.load_jobs_by_date',return_value=pd.DataFrame(records)),patch('daily_scraper.scrape_new_jobs') as scrape, \
-             patch('daily_scraper.logger.info') as info:
+        with patch('jobweaver.daily_scraper.load_config',return_value=self.config),patch('jobweaver.daily_scraper.load_effective_cv',return_value='CV'), \
+             patch('jobweaver.daily_scraper.resolve_scrape_model',return_value='mock'),patch('jobweaver.daily_scraper.retry_failed_analyses',return_value=(0,0)), \
+             patch('jobweaver.daily_scraper.db.load_jobs_by_date',return_value=pd.DataFrame(records)),patch('jobweaver.daily_scraper.scrape_new_jobs') as scrape, \
+             patch('jobweaver.daily_scraper.logger.info') as info:
             daily_scraper._run_daily_for_user(self.user)
         scrape.assert_not_called()
         self.assertIn(unittest.mock.call('Daily scrape complete: %s qualifying jobs.',1),info.call_args_list)
@@ -264,8 +264,8 @@ class RatingLifecycleTest(unittest.TestCase):
         payload={'german_level':'C1','german_strength':'required','german_evidence':'German C1 required',
                  'summary':'Role','match_checks':[dict(requirement='Python',importance='must',
                  posting_quote='Python required',coverage='shown',cv_quote='CV')]}
-        with patch('scrapers.run_ai_prompt',return_value=json.dumps(payload)),patch('server.load_cv_text',return_value='CV'), \
-             patch('server._effective_ai_model',return_value='mock'),patch('server.load_user_config_dict',return_value=self.config):
+        with patch('jobweaver.scrapers.run_ai_prompt',return_value=json.dumps(payload)),patch('jobweaver.server.load_cv_text',return_value='CV'), \
+             patch('jobweaver.server._effective_ai_model',return_value='mock'),patch('jobweaver.server.load_user_config_dict',return_value=self.config):
             response=server.add_job_manual(server.ManualJobRequest(title='Fictional',company='Example',
                 description='Requirements: Python required. German C1 required'),user=self.user)
         self.assertEqual(response['job']['match_rating'],'Blocked')
@@ -275,7 +275,7 @@ class RatingLifecycleTest(unittest.TestCase):
         self.save(processed=0,analysis_state='pending',raw_description='Python required')
         payload={'german_level':'none','german_strength':'none','summary':'Role', 'match_checks':[
             dict(requirement='Python',importance='must',posting_quote='Python required',coverage='shown',cv_quote='CV')]}
-        with patch('scrapers.run_ai_prompt',return_value=json.dumps(payload)):
+        with patch('jobweaver.scrapers.run_ai_prompt',return_value=json.dumps(payload)):
             ok,error=scrapers.analyse_stored_job(db.get_job_by_id('rated',self.user['id']),self.user,'CV','mock')
         self.assertTrue(ok,error)
         stored=db.get_job_by_id('rated',self.user['id'])
@@ -288,7 +288,7 @@ class RatingLifecycleTest(unittest.TestCase):
 
 class DemoRatingEvidenceTest(unittest.TestCase):
     def test_all_demo_checks_and_conflicts_ground_against_fictional_profile(self):
-        import career_record
+        from jobweaver import career_record
         root=Path(__file__).resolve().parents[1]
         record,_=career_record.load(root/'examples/career_record.example.yaml')
         cv=career_record.scoring_text(record)+'\n\nRecent Experience & Standing Notes:\n'+(root/'examples/demo/standing-notes.md').read_text()

@@ -35,7 +35,7 @@ def password_needs_upgrade(stored: str) -> bool:
 
 
 def create_session_token(user_id: int, credential_hash=None) -> str:
-    import db
+    from jobweaver import db
     token = secrets.token_urlsafe(32)
     now = int(time.time())
     if not db.create_session(user_id, hashlib.sha256(token.encode()).hexdigest(),
@@ -47,18 +47,18 @@ def create_session_token(user_id: int, credential_hash=None) -> str:
 def verify_session_token(token: str | None) -> int | None:
     if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
         return None
-    import db
+    from jobweaver import db
     return db.session_user(hashlib.sha256(token.encode()).hexdigest(), int(time.time()))
 
 
 def revoke_session_token(token: str | None) -> None:
     if isinstance(token, str):
-        import db
+        from jobweaver import db
         db.revoke_session(hashlib.sha256(token.encode()).hexdigest())
 
 
 def reserve_login_attempt(username: str, address: str, now: int) -> int:
-    import db
+    from jobweaver import db
     def bucket(value):
         return hashlib.sha256(value.encode()).hexdigest()
     return db.reserve_login_attempt({bucket('peer:' + address): 30,

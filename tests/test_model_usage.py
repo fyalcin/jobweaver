@@ -19,12 +19,12 @@ import threading
 import unittest
 from unittest.mock import patch
 
-import db
-import generators
-import model_transport as mt
-import model_usage
-from background_queue import BackgroundQueue, bounded_results
-from operation_budget import (AttributionError, Budget, OperationCancelled, OperationDeadline, OperationTerminated,
+from jobweaver import db
+from jobweaver import generators
+from jobweaver import model_transport as mt
+from jobweaver import model_usage
+from jobweaver.background_queue import BackgroundQueue, bounded_results
+from jobweaver.operation_budget import (AttributionError, Budget, OperationCancelled, OperationDeadline, OperationTerminated,
                               QuotaExceeded, UsageLedgerUnavailable, current, operation, scope)
 
 QUOTA_ENV = (model_usage.ENV_ATTEMPTS, model_usage.ENV_OUTPUT_TOKENS, model_usage.ENV_ZONE)
@@ -212,7 +212,7 @@ class LedgerFieldsTest(LedgerFixture):
         self.assertEqual(self.rows(), [])
         with self.assertRaises(UsageLedgerUnavailable):
             shared.check()  # Terminal for the whole operation.
-        import server
+        from jobweaver import server
         response = asyncio.run(server.operation_terminal_response(None, result))
         self.assertEqual(response.status_code, 503)
 
@@ -232,7 +232,7 @@ class LedgerFieldsTest(LedgerFixture):
         self.assertNotIn('busy', str(result))
         supervise.assert_not_called()
         self.assertEqual(self.rows(), [])
-        import server
+        from jobweaver import server
         self.assertEqual(asyncio.run(server.operation_terminal_response(None, result)).status_code, 502)
 
     def test_retention_prunes_rows_older_than_400_days_at_backend_start(self):
@@ -292,7 +292,7 @@ class QuotaTest(LedgerFixture):
         self.assertEqual(result.retry_after, 60)
         self.assertIn('requests', str(result))
         self.assertNotIn('spend', str(result).lower())
-        import server
+        from jobweaver import server
         response = asyncio.run(server.operation_terminal_response(None, result))
         self.assertEqual((response.status_code, response.headers['Retry-After']), (429, '60'))
 
@@ -370,10 +370,10 @@ class QuotaTest(LedgerFixture):
         code = r'''
 import os, sys, time
 from pathlib import Path
-import db
+from jobweaver import db
 db.set_db_path(sys.argv[1])
-import model_transport as mt
-from operation_budget import Budget, scope, QuotaExceeded
+from jobweaver import model_transport as mt
+from jobweaver.operation_budget import Budget, scope, QuotaExceeded
 class Reply:
     status_code = 200
     content = b'{"choices":[{"message":{"content":"x"}}]}'
@@ -417,7 +417,7 @@ print(sent)
         self.assertEqual(self.rows(), [])
         env = {key: value for key, value in os.environ.items()}
         env[model_usage.ENV_ATTEMPTS] = 'abc'
-        startup = subprocess.run([sys.executable, '-c', 'import daily_scraper; daily_scraper.run_daily_scraping()'],
+        startup = subprocess.run([sys.executable, '-c', 'from jobweaver import daily_scraper; daily_scraper.run_daily_scraping()'],
                                  env=env, capture_output=True, text=True, timeout=60)
         self.assertNotEqual(startup.returncode, 0)
         self.assertIn(model_usage.ENV_ATTEMPTS, startup.stderr)
@@ -431,7 +431,7 @@ print(sent)
 
 class AdministrationTest(LedgerFixture):
     def run_admin(self, *argv):
-        import manage_users
+        from jobweaver import manage_users
         output = io.StringIO()
         with redirect_stdout(output), redirect_stderr(io.StringIO()):
             code = manage_users.main(list(argv))
@@ -470,7 +470,7 @@ class AdministrationTest(LedgerFixture):
                 self.run_admin('usage', '--day', day)
 
     def test_manage_users_loads_dotenv_quota_settings(self):
-        import manage_users
+        from jobweaver import manage_users
         def load():
             os.environ[model_usage.ENV_ATTEMPTS] = '17'
         with patch.object(manage_users, 'load_dotenv', side_effect=load) as loaded:
@@ -480,8 +480,8 @@ class AdministrationTest(LedgerFixture):
         self.assertIn('0 of 17', text)
 
     def test_put_config_cannot_change_quotas(self):
-        import server
-        import user_assets
+        from jobweaver import server
+        from jobweaver import user_assets
         with patch.multiple(user_assets, BASE_DIR=self.temp.name, PROFILES_DIR=str(Path(self.temp.name, 'profiles'))):
             server.save_config(body={'daily_attempts': 999999, 'model_quotas': {'attempts': 999999},
                                      'user_model_quotas': {'daily_output_tokens': 1}}, user=self.alice)
@@ -490,7 +490,7 @@ class AdministrationTest(LedgerFixture):
                          (300, 2_400_000, False))
 
     def test_usage_today_route_is_scoped_to_signed_in_user(self):
-        import server
+        from jobweaver import server
         self.call(reply(completion(cost=1)))
         self.call(reply(completion()), user=self.bob)
         status = server.usage_today(user=self.alice)
@@ -550,7 +550,7 @@ class AdministrationTest(LedgerFixture):
 class AttributionTest(LedgerFixture):
     def test_unattributed_operation_fails_closed_without_dispatch(self):
         shared = Budget()
-        with patch.object(mt, '_supervise') as supervise, patch('capacity.acquire') as acquire, scope(budget=shared):
+        with patch.object(mt, '_supervise') as supervise, patch('jobweaver.capacity.acquire') as acquire, scope(budget=shared):
             with self.assertRaises(AttributionError):
                 generators.openrouter_api('x', 'fictional/model')
         supervise.assert_not_called()
@@ -582,7 +582,7 @@ class AttributionTest(LedgerFixture):
         self.assertEqual(seen, [(self.alice['id'], 'web'), (None, None), (None, None)])
 
     def test_web_route_attributes_signed_in_user(self):
-        import server
+        from jobweaver import server
         db.upsert_job({'id': 'job-1', 'job_url': 'https://example.com/job/1', 'company': 'Example AG', 'title': 'Role'},
                       user_id=self.bob['id'])
         with patch.object(mt, '_supervise', side_effect=[reply(completion('fictional research'))]):
@@ -613,7 +613,7 @@ class AttributionTest(LedgerFixture):
                          (self.bob['id'], 'background', task['task_id'], 'collection'))
 
     def test_daily_run_attributes_each_user_and_quota_refusal_continues(self):
-        import daily_scraper as daily
+        from jobweaver import daily_scraper as daily
         model_usage.set_quota(self.alice['id'], attempts=1)
         self.call(reply(completion()))  # Alice is already at her quota.
         seen = []
@@ -633,7 +633,7 @@ class AttributionTest(LedgerFixture):
         self.assertEqual([(row['user_id'], row['origin']) for row in self.rows(self.bob)], [(self.bob['id'], 'scheduled')])
 
     def test_cli_attributes_after_user_lookup_and_reports_quota(self):
-        import generate_for_job
+        from jobweaver import generate_for_job
         seen = []
         def lookup(job_id, user_id):
             seen.append((current().owner, current().origin, current().purpose))
@@ -648,13 +648,13 @@ class AttributionTest(LedgerFixture):
         self.assertIn('quota', result['errors'][0])
 
     def test_model_helper_script_never_loads_database_or_dotenv(self):
-        code = ('import runpy, sys\nsys.argv = ["model_transport.py", "--worker"]\n'
-                'runpy.run_path("model_transport.py", run_name="__main__")\n'
-                'print(sorted(name for name in ("db", "dotenv", "model_usage", "pandas") if name in sys.modules), '
+        code = ('import runpy, sys\nsys.argv = ["model_transport", "--worker"]\n'
+                'runpy.run_module("jobweaver.model_transport", run_name="__main__")\n'
+                'print(sorted(name for name in ("jobweaver.db", "dotenv", "jobweaver.model_usage", "pandas") if name in sys.modules), '
                 'file=sys.stderr)')
         # -S keeps the isolated runner's sitecustomize (which imports dotenv) out of the measurement.
         result = subprocess.run([sys.executable, '-S', '-c', code], input=b'not-a-deadline\n', capture_output=True,
-                                cwd=str(Path(mt.__file__).parent), timeout=30)
+                                cwd=str(Path(mt.__file__).parents[1]), timeout=30)
         self.assertEqual(result.stdout, b'{"error":"ValueError"}')
         self.assertEqual(result.stderr.strip(), b'[]')
 

@@ -1,8 +1,8 @@
 """Mappings into the Posting fields: stable IDs only, and nothing beyond the schema (ADR-0006)."""
 import unittest
 
-import postings
-import scrapers
+from jobweaver import postings
+from jobweaver import scrapers
 
 
 class StableIdTest(unittest.TestCase):

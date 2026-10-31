@@ -5,36 +5,40 @@ Each account owns its job list, profile configuration and document files.
 
 ## Modules
 
+The Python modules are one flat package, `jobweaver/`. Run them from the repository root with
+`uv run python -m jobweaver.<module>`. Data, templates and the frontend stay at the repository root
+(`PROJECT_ROOT` in `jobweaver/__init__.py`).
+
 | Module | Responsibility |
 |---|---|
-| `server.py` | Authenticated API, background tasks, document lifecycle and optional built frontend |
-| `db.py` | SQLite schema, user-scoped job queries and persistent task records |
-| `background_queue.py` | Finite persistent-operation admission, fair dispatch, cancellation and backend ownership |
-| `auth.py` | Salted PBKDF2 passwords, hashed revocable sessions and sign-in throttling |
-| `web_security.py` | Explicit hosts, same-origin browser requests and HTTPS deployment policy |
-| `input_limits.py`, `request_limits.py` | Shared HTTP/cron input contracts and byte-counted ASGI request admission |
-| `user_assets.py` | Profile paths, root template fallback and effective scoring CV |
-| `postings.py` | Posting schema, validation gate and rejection counts |
-| `scrapers.py` | Apify mappings, collection orchestration and model analysis |
-| `company_feeds.py` | Greenhouse, Personio, SmartRecruiters and SuccessFactors readers |
-| `safe_fetch.py`, `job_jsonld.py` | Public URL checks and schema.org JobPosting extraction |
-| `job_policy.py`, `analysis_validation.py` | Requirement checks, grounded evidence, ratings, eligibility and fingerprints |
-| `generators.py` | Model transport, PDF builds and preview conversion |
-| `career_record.py`, `career_cv.py` | Career-record validation, scoring text and deterministic CV rendering |
-| `reviewed_documents.py` | Claim selection, letter planning/writing and evidence checks |
-| `document_artifacts.py` | Source/PDF hashes, build records and atomic publication |
-| `compiler_sandbox.py` | Isolated native document tools with explicit inputs, process limits and supervision |
-| `capacity.py` | Fixed cross-process slots for model POSTs and native tools |
-| `model_usage.py` | Durable model usage ledger and per-User daily request quotas |
-| `jobweaver_mcp.py` | Four read-only tools over authenticated HTTP, exposed through stdio |
-| `daily_scraper.py` | Optional scheduled collection and scoring, with no notifications |
-| `demo_mode.py`, `demo_data.py` | Demo restrictions, read-only document responses and fictional seed data |
+| `jobweaver/server.py` | Authenticated API, background tasks, document lifecycle and optional built frontend |
+| `jobweaver/db.py` | SQLite schema, user-scoped job queries and persistent task records |
+| `jobweaver/background_queue.py` | Finite persistent-operation admission, fair dispatch, cancellation and backend ownership |
+| `jobweaver/auth.py` | Salted PBKDF2 passwords, hashed revocable sessions and sign-in throttling |
+| `jobweaver/web_security.py` | Explicit hosts, same-origin browser requests and HTTPS deployment policy |
+| `jobweaver/input_limits.py`, `jobweaver/request_limits.py` | Shared HTTP/cron input contracts and byte-counted ASGI request admission |
+| `jobweaver/user_assets.py` | Profile paths, root template fallback and effective scoring CV |
+| `jobweaver/postings.py` | Posting schema, validation gate and rejection counts |
+| `jobweaver/scrapers.py` | Apify mappings, collection orchestration and model analysis |
+| `jobweaver/company_feeds.py` | Greenhouse, Personio, SmartRecruiters and SuccessFactors readers |
+| `jobweaver/safe_fetch.py`, `jobweaver/job_jsonld.py` | Public URL checks and schema.org JobPosting extraction |
+| `jobweaver/job_policy.py`, `jobweaver/analysis_validation.py` | Requirement checks, grounded evidence, ratings, eligibility and fingerprints |
+| `jobweaver/generators.py` | Model transport, PDF builds and preview conversion |
+| `jobweaver/career_record.py`, `jobweaver/career_cv.py` | Career-record validation, scoring text and deterministic CV rendering |
+| `jobweaver/reviewed_documents.py` | Claim selection, letter planning/writing and evidence checks |
+| `jobweaver/document_artifacts.py` | Source/PDF hashes, build records and atomic publication |
+| `jobweaver/compiler_sandbox.py` | Isolated native document tools with explicit inputs, process limits and supervision |
+| `jobweaver/capacity.py` | Fixed cross-process slots for model POSTs and native tools |
+| `jobweaver/model_usage.py` | Durable model usage ledger and per-User daily request quotas |
+| `jobweaver/jobweaver_mcp.py` | Four read-only tools over authenticated HTTP, exposed through stdio |
+| `jobweaver/daily_scraper.py` | Optional scheduled collection and scoring, with no notifications |
+| `jobweaver/demo_mode.py`, `jobweaver/demo_data.py` | Demo restrictions, read-only document responses and fictional seed data |
 
 The frontend groups screens in `webapp/src/components/tabs/`, shared controls in `components/`, stateful API
 workflows in `hooks/`, and document parsing/compilation support in `services/` and `workers/`.
 
 Appearance uses Loden Light by default, a direct Loden Dark control and seven community
-palettes. `ui_preferences.py` normalizes saved theme/font IDs on read without rewriting
+palettes. `jobweaver/ui_preferences.py` normalizes saved theme/font IDs on read without rewriting
 profile files; `webapp/src/preferences.js` provides the matching browser contract.
 Legacy `default` and unknown themes become Loden Light; retired decorative palettes become
 Loden Dark. Explicit supported fonts are retained, while new accounts use Fira Sans and
@@ -175,7 +179,7 @@ verifier override (including a visible opt-out). The public copy contains no `ag
 
 ## Operation budgets
 
-`operation_budget.py` owns one thread-safe Budget per operation, with a monotonic absolute deadline,
+`jobweaver/operation_budget.py` owns one thread-safe Budget per operation, with a monotonic absolute deadline,
 terminal cancellation/exhaustion and atomic reservations for each actual POST. Nested scopes reuse it;
 `bounded_results` submits each child with a fresh copied Context pointing to the same Budget. Scopes
 wrap the function that actually executes, including queue callbacks, synchronous routes, daily per-user
@@ -198,7 +202,7 @@ refusals/retries reserve again without refunds. Byte limits are not token estima
 depend on endpoint compliance. Test code can inject tiny Limits; production has no unlimited setting.
 These per-operation limits reset for a new operation and do not enforce daily quotas or monetary spending.
 
-`model_transport.py` dispatches one short-lived exec helper per POST. The parent supervises startup,
+`jobweaver/model_transport.py` dispatches one short-lived exec helper per POST. The parent supervises startup,
 stdin transfer, DNS, headers and streaming body against the same deadline and cancellation state. It
 bounds both IPC pipes, kills/reaps before returning and never automatically retries ambiguous transport
 errors. Retry waits poll cancellation and the remaining deadline. Credentials travel in a bounded stdin
@@ -208,7 +212,7 @@ and refuse encoded responses and redirects. Configured local HTTP model endpoint
 supported; public fetch SSRF rules belong to a separate transport. Legacy provider unit tests explicitly
 inject a private inline I/O fixture; production transport always uses the helper.
 
-`capacity.py` provides fixed slots shared by every process using one data directory: 4 model POSTs and
+`jobweaver/capacity.py` provides fixed slots shared by every process using one data directory: 4 model POSTs and
 2 native tools. Lock files live in `.jobweaver-capacity/` beside the resolved database path, so
 `db.set_db_path`, `JOBWEAVER_DATA_DIR` and symlink aliases select the same slots. The leaf calls
 `post_json` and `run_tool` acquire them, which covers the backend, synchronous routes, standalone CLI and
@@ -251,13 +255,13 @@ Limits default to 300 requests and 2,400,000 requested output tokens per User pe
 `JOBWEAVER_QUOTA_TZ` (server local zone by default); `JOBWEAVER_QUOTA_REQUESTS` and
 `JOBWEAVER_QUOTA_OUTPUT_TOKENS` must be positive integers and are validated at backend and daily-run
 startup. Per-User overrides live in `user_model_quotas` (NULL means the default) and are changed only with
-`manage_users.py quota`; `PUT /api/config` writes profile JSON that the quota never reads. Attempts are
+`python -m jobweaver.manage_users quota`; `PUT /api/config` writes profile JSON that the quota never reads. Attempts are
 never refunded and custom endpoints count. Refusal raises `QuotaExceeded` (an `OperationExhausted`): HTTP
 429 with `Retry-After` until the reset, terminal for sibling stages; the daily run logs it and continues
 with the next User; the CLI prints it and exits 1. A busy or unusable ledger raises
 `UsageLedgerUnavailable` (HTTP 503); nothing is sent. A missing owner (User deleted during the operation)
-is an `AttributionError` (HTTP 502); nothing is sent. The backend, cron runs, `generate_for_job.py` and
-`manage_users.py` each load `.env`; all of them must see the same `JOBWEAVER_QUOTA_*` values, or their
+is an `AttributionError` (HTTP 502); nothing is sent. The backend, cron runs, `jobweaver.generate_for_job` and
+`jobweaver.manage_users` each load `.env`; all of them must see the same `JOBWEAVER_QUOTA_*` values, or their
 day boundaries and defaults differ.
 
 `model_calls` rows hold user, origin, operation/task ids, purpose, label (one of a fixed set of code
@@ -272,11 +276,11 @@ URLs, query strings and keys are never stored. The tables are created by `init_d
 CLI runs may skip it, inside the reservation transaction. `delete_user` removes the User's rows. Backend
 startup deletes rows reserved more than 400 days ago, next to the queue pruning. Unexpected response-parse
 failures leave the response fields NULL; the caller still receives the response. The model
-helper loads `model_transport.py` as a script and never imports `db`, `model_usage` or dotenv.
+helper runs `jobweaver.model_transport` on its own and never imports `db`, `model_usage` or dotenv.
 
 This is a request-volume quota, not a monetary ceiling: price depends on model, provider and prompt size;
 cost appears only after a response and only when reported; and cancelled or failed calls may still be
-billed. `manage_users.py usage` therefore reports coverage (rows, rows with cost, rows without response)
+billed. `python -m jobweaver.manage_users usage` therefore reports coverage (rows, rows with cost, rows without response)
 and sums cost only over rows that reported one, per unit.
 
 ## Documents

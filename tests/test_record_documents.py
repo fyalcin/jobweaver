@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import reviewed_documents as documents
-import user_assets
+from jobweaver import reviewed_documents as documents
+from jobweaver import user_assets
 
 EXAMPLE = Path(__file__).resolve().parents[1] / 'examples' / 'career_record.example.yaml'
 FILLER = ' The work required careful checks of every result before anyone else relied on it.'
@@ -224,8 +224,8 @@ class RecordDocumentsTest(unittest.TestCase):
 '''))
 
     def test_personal_context_reaches_letters_but_not_cv_or_scoring(self):
-        import career_cv
-        import career_record
+        from jobweaver import career_cv
+        from jobweaver import career_record
         before, _ = documents.career_record_for('alex')
         cv = career_cv.render(before, 'research-software')
         scoring = career_record.scoring_text(before)
@@ -274,7 +274,7 @@ class RecordDocumentsTest(unittest.TestCase):
         self.assertNotIn('I enjoy baking bread.', prompt)
 
     def test_web_cv_editor_is_read_only_for_record_users(self):
-        import server
+        from jobweaver import server
         from fastapi import HTTPException
         shown = server.get_cv(user={'username': 'alex'})
         self.assertTrue(shown['read_only'])

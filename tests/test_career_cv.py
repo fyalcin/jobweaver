@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import career_cv
-import career_record
+from jobweaver import career_cv
+from jobweaver import career_record
 
 EXAMPLE = Path(__file__).resolve().parents[1] / 'examples' / 'career_record.example.yaml'
 

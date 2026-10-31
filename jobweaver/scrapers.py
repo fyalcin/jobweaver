@@ -8,7 +8,7 @@ eliminating the circular dependency that previously existed.
 import json
 import logging
 import os
-from input_limits import ScrapeInput, ShortText, SourceLabel, validate_collection_config
+from jobweaver.input_limits import ScrapeInput, ShortText, SourceLabel, validate_collection_config
 from pydantic import TypeAdapter
 from itertools import islice
 import re
@@ -18,16 +18,16 @@ from typing import Optional, Callable
 import pandas as pd
 from dotenv import load_dotenv
 
-import db
-import demo_mode
-from operation_budget import operation, current, check, OperationTerminated
-import postings
-from german import normalize_german_level, requires_german
-from salary import parse_salary_yearly, salary_yearly_eur
-from generators import AIContentFilterError, AITruncatedError, run_ai_prompt
-from user_assets import resolve_user_path
-from job_policy import match_rating, judgement_calls, fingerprint, analysis_response_format, description_incomplete
-from analysis_validation import AnalysisValidationError, validate_extraction, save_failure
+from jobweaver import db
+from jobweaver import demo_mode
+from jobweaver.operation_budget import operation, current, check, OperationTerminated
+from jobweaver import postings
+from jobweaver.german import normalize_german_level, requires_german
+from jobweaver.salary import parse_salary_yearly, salary_yearly_eur
+from jobweaver.generators import AIContentFilterError, AITruncatedError, run_ai_prompt
+from jobweaver.user_assets import resolve_user_path
+from jobweaver.job_policy import match_rating, judgement_calls, fingerprint, analysis_response_format, description_incomplete
+from jobweaver.analysis_validation import AnalysisValidationError, validate_extraction, save_failure
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -833,7 +833,7 @@ def scrape_new_jobs(
             log_fn(f"Karriere Apify scrape error: {e}", "error")
 
     elif params.source == "company-feeds":
-        import company_feeds
+        from jobweaver import company_feeds
 
         try:
             feed_config = company_feeds.load_companies(username)
@@ -966,7 +966,7 @@ def scrape_new_jobs(
     processed_count = 0
     analysis_errors = 0
     
-    from background_queue import bounded_results
+    from jobweaver.background_queue import bounded_results
     import threading
     update_lock = threading.Lock()
     

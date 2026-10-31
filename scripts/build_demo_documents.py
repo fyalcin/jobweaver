@@ -7,10 +7,10 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-import career_record
-import career_cv
-import reviewed_documents
-from document_artifacts import validate_pdf
+from jobweaver import career_record
+from jobweaver import career_cv
+from jobweaver import reviewed_documents
+from jobweaver.document_artifacts import validate_pdf
 
 
 def main():

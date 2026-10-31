@@ -9,8 +9,8 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
-from postings import html_to_text, iso_date
-from salary import salary_yearly_eur
+from jobweaver.postings import html_to_text, iso_date
+from jobweaver.salary import salary_yearly_eur
 
 
 def _is_job_posting(node) -> bool:

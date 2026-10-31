@@ -7,10 +7,10 @@ from unittest.mock import patch
 from starlette.requests import Request
 from starlette.responses import Response
 
-import demo_mode
-import generators
-import scrapers
-import server
+from jobweaver import demo_mode
+from jobweaver import generators
+from jobweaver import scrapers
+from jobweaver import server
 
 ON = {"JOBWEAVER_DEMO": "1"}
 
@@ -66,13 +66,13 @@ class SecondLayerTest(unittest.TestCase):
                 scrapers.scrape_new_jobs(scrapers.ScrapeParams(source="company-feeds"), user={"id": 1})
 
     def test_daily_run_does_nothing(self):
-        import daily_scraper
-        with patch.dict(os.environ, ON), patch("db.list_users") as users:
+        from jobweaver import daily_scraper
+        with patch.dict(os.environ, ON), patch("jobweaver.db.list_users") as users:
             daily_scraper.run_daily_scraping()
         users.assert_not_called()
 
     def test_model_list_does_not_contact_providers(self):
-        with patch.dict(os.environ, ON), patch("urllib.request.urlopen") as external, patch("server.list_custom_models") as custom:
+        with patch.dict(os.environ, ON), patch("urllib.request.urlopen") as external, patch("jobweaver.server.list_custom_models") as custom:
             self.assertEqual(server.get_openrouter_models()["models"][0]["id"], "demo/prepared-example")
         external.assert_not_called()
         custom.assert_not_called()

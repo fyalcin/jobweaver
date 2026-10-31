@@ -11,15 +11,15 @@ import tempfile
 import unittest
 import unittest.mock
 
-import db
-import user_assets
+from jobweaver import db
+from jobweaver import user_assets
 
 # Point db at a throwaway SQLite file BEFORE importing server (server runs db.init_db() at import).
 _TMP = tempfile.mkdtemp(prefix="gj-dm-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
-import generators  # noqa: E402
+from jobweaver import server  # noqa: E402
+from jobweaver import generators  # noqa: E402
 
 
 def setUpModule():

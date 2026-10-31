@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-import db
-import server
+from jobweaver import db
+from jobweaver import server
 
 
 class PublishedDocumentsTest(unittest.TestCase):
@@ -22,7 +22,7 @@ class PublishedDocumentsTest(unittest.TestCase):
         self.user = {"id": 1, "username": "synthetic"}
         db.upsert_job({"id": "li_1", "company": "Acme", "job_url": "https://example.invalid/1"}, user_id=1)
         self.outputs = os.path.join(self.temp.name, "outputs")
-        patcher = patch("server.user_outputs_dir", return_value=self.outputs)
+        patcher = patch("jobweaver.server.user_outputs_dir", return_value=self.outputs)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -45,7 +45,7 @@ class PublishedDocumentsTest(unittest.TestCase):
     def test_summaries_carry_list_fields_only(self):
         db.upsert_job({"id": "li_2", "company": "Beta", "job_url": "https://example.invalid/2", "title": "T",
                        "raw_description": "Long text", "match_score": 70}, user_id=1)
-        with patch("server.load_cv_text", return_value="CV"), patch("server._effective_ai_model", return_value="m"):
+        with patch("jobweaver.server.load_cv_text", return_value="CV"), patch("jobweaver.server._effective_ai_model", return_value="m"):
             summaries = {s["id"]: s for s in server.get_job_summaries(user=self.user)}
         self.assertEqual(summaries["li_2"]["match_score"], 70)
         self.assertNotIn("raw_description", summaries["li_2"])

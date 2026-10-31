@@ -10,10 +10,10 @@ import time
 import unittest
 from unittest.mock import patch
 
-import capacity
-import compiler_sandbox as cs
-import db
-from operation_budget import Budget, Limits, scope, OperationCancelled, OperationDeadline
+from jobweaver import capacity
+from jobweaver import compiler_sandbox as cs
+from jobweaver import db
+from jobweaver.operation_budget import Budget, Limits, scope, OperationCancelled, OperationDeadline
 from test_capacity import free, until
 
 # Runs as the sandboxed tool. A setsid-detached grandchild writes a heartbeat.
@@ -143,9 +143,9 @@ class NativeSupervisionTest(unittest.TestCase):
         held = capacity.acquire('native', wait=0)
         parent = r'''
 import shutil, sys
-import db
+from jobweaver import db
 db.set_db_path(sys.argv[1] + '/test.db')
-import compiler_sandbox as cs
+from jobweaver import compiler_sandbox as cs
 real = shutil.which
 cs.shutil.which = lambda name, *a, **k: '/usr/bin/python3' if name == 'python3' else real(name, *a, **k)
 cs.TOOLS = {'python3'}

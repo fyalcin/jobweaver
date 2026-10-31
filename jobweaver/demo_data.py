@@ -4,7 +4,9 @@ from datetime import date, timedelta
 from pathlib import Path
 import shutil
 
-ROOT = Path(__file__).resolve().parent
+from jobweaver import PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 FIXTURES = ROOT / "examples" / "demo"
 
 
@@ -18,9 +20,9 @@ def seed(destination: Path) -> None:
     import os
     os.environ["JOBWEAVER_DATA_DIR"] = str(destination)
     os.environ["PYTHON_DOTENV_DISABLED"] = "1"
-    import auth
-    import db
-    import user_assets
+    from jobweaver import auth
+    from jobweaver import db
+    from jobweaver import user_assets
     if Path(user_assets.DATA_DIR) != destination or Path(db.DB_PATH).parent != destination:
         raise ValueError("Storage modules already use a different data directory. Start a new process.")
     db.init_db()
@@ -33,8 +35,8 @@ def seed(destination: Path) -> None:
     config["auto_generate"].update({"document_engine": "latex", "enabled": False})
     (profile / "scraper_config.json").write_text(json.dumps(config, indent=2))
     (profile / "ui_preferences.json").write_text(json.dumps({"theme": "loden-light", "font": "fira-sans"}))
-    from job_policy import fingerprint, apply_rating
-    from user_assets import load_effective_cv
+    from jobweaver.job_policy import fingerprint, apply_rating
+    from jobweaver.user_assets import load_effective_cv
     shutil.copy2(FIXTURES / "standing-notes.md", profile / "standing_notes.txt")
     cv_fingerprint = fingerprint(load_effective_cv("demo"), config["openrouter_model"])
     jobs = json.loads((FIXTURES / "jobs.json").read_text())

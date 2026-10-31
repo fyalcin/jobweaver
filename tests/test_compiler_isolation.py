@@ -4,14 +4,14 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from generators import compile_latex
+from jobweaver.generators import compile_latex
 
 
 class CompilerIsolationTest(unittest.TestCase):
     def test_missing_isolation_fails_without_an_unsafe_fallback(self):
         with tempfile.TemporaryDirectory() as temp:
             Path(temp, 'document.tex').write_text(r'\documentclass{article}\begin{document}Fictional\end{document}')
-            with patch('compiler_sandbox.shutil.which', return_value=None):
+            with patch('jobweaver.compiler_sandbox.shutil.which', return_value=None):
                 ok, message = compile_latex(temp, 'document.tex', 'document.pdf', temp)
             self.assertFalse(ok)
             self.assertIn('require Bubblewrap', message)

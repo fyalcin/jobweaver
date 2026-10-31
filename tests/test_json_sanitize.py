@@ -1,7 +1,7 @@
 
 import unittest
 
-import server
+from jobweaver import server
 
 
 class JsonSanitizeTest(unittest.TestCase):

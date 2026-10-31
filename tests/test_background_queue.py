@@ -11,9 +11,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import db
-import server
-from background_queue import BackgroundQueue, bounded_results
+from jobweaver import db
+from jobweaver import server
+from jobweaver.background_queue import BackgroundQueue, bounded_results
 
 
 class QueueFixture(unittest.TestCase):
@@ -146,7 +146,7 @@ class BackgroundQueueTest(QueueFixture):
         self.wait_status(second, 'completed')
 
     def test_thread_start_failure_frees_reservation_for_retry(self):
-        with patch('background_queue.threading.Thread.start', side_effect=RuntimeError('thread unavailable')):
+        with patch('jobweaver.background_queue.threading.Thread.start', side_effect=RuntimeError('thread unavailable')):
             failed = self.submit()
         self.assertEqual(self.row(failed)['status'], 'failed')
         self.assertFalse(self.queue._operations)
@@ -197,8 +197,8 @@ class BackgroundQueueTest(QueueFixture):
 
     def test_owner_lock_refuses_another_process_before_recovery(self):
         first = self.submit()
-        code = """import sys, db
-from background_queue import BackgroundQueue
+        code = """import sys; from jobweaver import db
+from jobweaver.background_queue import BackgroundQueue
 db.set_db_path(sys.argv[1])
 try:
     BackgroundQueue().start()

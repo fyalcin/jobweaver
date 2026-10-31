@@ -15,7 +15,8 @@ import uuid
 from datetime import datetime, timezone
 
 from pydantic import ValidationError
-from job_policy import Constraint, Extraction, RequirementCheck, PreferenceConflict, deduplicate_checks, deduplicate_conflicts
+from jobweaver import PROJECT_ROOT
+from jobweaver.job_policy import Constraint, Extraction, RequirementCheck, PreferenceConflict, deduplicate_checks, deduplicate_conflicts
 
 logger = logging.getLogger(__name__)
 MAX_RECORDS = 200
@@ -189,7 +190,7 @@ def save_failure(source, model, attempt, data, response, issues):
     """
     try:
         directory = Path(os.environ.get('JOBWEAVER_ANALYSIS_DIAGNOSTICS_DIR',
-                                       str(Path(__file__).resolve().parent / 'logs' / 'analysis-failures')))
+                                       str(PROJECT_ROOT / 'logs' / 'analysis-failures')))
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = directory.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():

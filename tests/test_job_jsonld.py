@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 import time
 
-import job_jsonld
-import safe_fetch
+from jobweaver import job_jsonld
+from jobweaver import safe_fetch
 
 
 def page(*blocks, raw=None):
@@ -109,13 +109,13 @@ class SafeFetchTest(unittest.TestCase):
 
     def test_hostname_resolving_to_a_private_address_is_refused(self):
         fake = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.0.10", 80))]
-        with patch("safe_fetch.socket.getaddrinfo", return_value=fake):
+        with patch("jobweaver.safe_fetch.socket.getaddrinfo", return_value=fake):
             with self.assertRaises(safe_fetch.UnsafeURL):
                 safe_fetch.check_url("http://jobs.example.org/1")
 
     def test_public_hostname_passes(self):
         fake = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 443))]
-        with patch("safe_fetch.socket.getaddrinfo", return_value=fake):
+        with patch("jobweaver.safe_fetch.socket.getaddrinfo", return_value=fake):
             safe_fetch.check_url("https://jobs.example.org/1")
 
     def test_redirect_to_a_private_address_is_refused(self):
@@ -124,8 +124,8 @@ class SafeFetchTest(unittest.TestCase):
         connection = MagicMock()
         connection.getresponse.return_value = response
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 443))]
-        with patch("safe_fetch.socket.getaddrinfo", return_value=public), \
-             patch("safe_fetch._connect", return_value=connection) as connect:
+        with patch("jobweaver.safe_fetch.socket.getaddrinfo", return_value=public), \
+             patch("jobweaver.safe_fetch._connect", return_value=connection) as connect:
             with self.assertRaises(safe_fetch.UnsafeURL):
                 safe_fetch._fetch_in_helper("https://jobs.example.org/1", time.monotonic() + 5)
         connect.assert_called_once()
@@ -142,8 +142,8 @@ class SafeFetchTest(unittest.TestCase):
             seen.update(kwargs["headers"])
         connection.request.side_effect = get
         public = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 443))]
-        with patch("safe_fetch.socket.getaddrinfo", return_value=public), \
-             patch("safe_fetch._connect", return_value=connection), patch("safe_fetch._read_body", return_value=b"<html></html>"):
+        with patch("jobweaver.safe_fetch.socket.getaddrinfo", return_value=public), \
+             patch("jobweaver.safe_fetch._connect", return_value=connection), patch("jobweaver.safe_fetch._read_body", return_value=b"<html></html>"):
             safe_fetch._fetch_in_helper("https://jobs.example.org/1", time.monotonic() + 5)
         self.assertTrue(seen["User-Agent"].startswith("Jobweaver/"))
         self.assertNotIn("Mozilla", seen["User-Agent"])

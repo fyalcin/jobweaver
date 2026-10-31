@@ -2,8 +2,8 @@
 from contextlib import ExitStack, contextmanager
 from unittest.mock import patch
 import requests
-import model_transport
-import model_usage
+from jobweaver import model_transport
+from jobweaver import model_usage
 
 FICTIONAL_OWNER = 4242
 

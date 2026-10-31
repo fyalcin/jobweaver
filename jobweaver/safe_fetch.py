@@ -10,7 +10,6 @@ import ipaddress
 import json
 import math
 import os
-from pathlib import Path
 import socket
 import ssl
 import subprocess
@@ -22,6 +21,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit, quote
 import zlib
 
 import requests
+
+from jobweaver import PROJECT_ROOT
 
 USER_AGENT = "Jobweaver/1.0 (+https://github.com/fyalcin/jobweaver)"
 MAX_REDIRECTS = 5
@@ -296,8 +297,8 @@ def fetch_page(url: str, timeout: int = 15, *, allowed_hosts=None, allowed_types
             raise UnsafeURL("fetch options too large")
         # A file keeps stdout off an unbounded communicate() buffer.
         with tempfile.TemporaryFile() as output:
-            with subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--worker"],
-                                  stdin=subprocess.PIPE, stdout=output, stderr=subprocess.DEVNULL,
+            with subprocess.Popen([sys.executable, "-m", "jobweaver.safe_fetch", "--worker"],
+                                  stdin=subprocess.PIPE, stdout=output, stderr=subprocess.DEVNULL, cwd=PROJECT_ROOT,
                                   env={**{key: value for key, value in os.environ.items()
                                           if key in ("PATH", "SYSTEMROOT", "WINDIR", "PYTHONPATH", "PYTHONDONTWRITEBYTECODE")},
                                        "PYTHON_DOTENV_DISABLED": "1"}) as process:

@@ -32,7 +32,7 @@ import time
 from typing import Optional
 from urllib.parse import urlsplit
 
-from operation_budget import AttributionError, QuotaExceeded, UsageLedgerUnavailable, OperationTerminated
+from jobweaver.operation_budget import AttributionError, QuotaExceeded, UsageLedgerUnavailable, OperationTerminated
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def _duration(seconds: int) -> str:
 
 
 def _connect(timeout: float) -> sqlite3.Connection:
-    import db  # Lazy: the model helper loads model_transport.py as a script and never reaches this.
+    from jobweaver import db  # Lazy: the model helper runs model_transport on its own and never reaches this.
     conn = sqlite3.connect(db.DB_PATH, timeout=max(0.0, timeout), isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON')
@@ -128,7 +128,7 @@ def _connect(timeout: float) -> sqlite3.Connection:
 
 
 def _ensure(conn):
-    import db
+    from jobweaver import db
     db.ensure_model_usage_schema(conn)
 
 

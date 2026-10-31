@@ -15,9 +15,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="gimme-tests-") as temp:
         scratch = Path(temp)
-        for path in root.glob("*.py"):
-            shutil.copy2(path, scratch / path.name)
-        for name in ("tests", "base-cv-tex", "base-cl-tex", "base-typst", "scripts", "examples"):
+        for name in ("jobweaver", "tests", "base-cv-tex", "base-cl-tex", "base-typst", "scripts", "examples"):
             shutil.copytree(root / name, scratch / name, ignore=shutil.ignore_patterns("__pycache__"))
         for name in ("CV-plaintext.txt", "scraper_config.json", "pyproject.toml", "uv.lock"):
             if (root / name).exists():

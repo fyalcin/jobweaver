@@ -22,23 +22,24 @@ Object.assign(env, { JOBWEAVER_DATA_DIR: data, PYTHON_DOTENV_DISABLED: '1', PYTH
 const fixture = `
 import os, sys
 from pathlib import Path
-from demo_data import seed
+from jobweaver.demo_data import seed
 seed(Path(os.environ['JOBWEAVER_DATA_DIR']))
 # Give the fictional job a supported Typst CV for its Simple Mode editor.
 draft = Path(os.environ['JOBWEAVER_DATA_DIR']) / 'profiles/demo/drafts/CumulusResearch_demo_01'
 (draft / 'cv_demo_01.typ').write_text(Path('base-typst/base-cv.typ').read_text())
 (draft / 'sources.json').write_text('{"cv":"typ"}')
-import auth, db, user_assets
+from jobweaver import auth, db, user_assets
 db.create_user('fresh', auth.hash_password('fictional-fresh-password'))
 user_assets.ensure_user_dirs('fresh')
-import requests, urllib.request, safe_fetch
+import requests, urllib.request
+from jobweaver import safe_fetch
 def denied(*args, **kwargs):
     raise RuntimeError('Outbound HTTP disabled in disposable browser fixture')
 requests.sessions.Session.send = denied
 urllib.request.urlopen = denied
 safe_fetch.fetch_page = denied
 import uvicorn
-uvicorn.run('server:app', host='127.0.0.1', port=int(sys.argv[1]))
+uvicorn.run('jobweaver.server:app', host='127.0.0.1', port=int(sys.argv[1]))
 `;
 const child = spawn(join(root, '.venv/bin/python'), ['-c', fixture, String(port)], { cwd: root, env });
 let serverLog = '';

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate one job's CV and cover letter from the command line, without the HTTP API.
 
-    uv run python generate_for_job.py --user admin --job li_4474888661 [--force]
+    uv run python -m jobweaver.generate_for_job --user admin --job li_4474888661 [--force]
 
 Runs the same reviewed pipeline as the other document requests (approved fact IDs, fresh build,
 parsed-PDF validation, immutable output bundles) through `daily_scraper._generate_docs_for_job`,
@@ -29,7 +29,7 @@ CV text, the approved CV, the career record, claim policy, document instructions
 engine, tone, CV profile and the job's text, and while the letter's date is still today. `--force` rebuilds regardless.
 """
 import argparse
-from operation_budget import operation, check, current, QuotaExceeded
+from jobweaver.operation_budget import operation, check, current, QuotaExceeded
 import fcntl
 import json
 import os
@@ -50,9 +50,9 @@ def _today() -> str:
 def fingerprint(job: dict, username: str, config: dict, cv_text: str, model: str, tone: str,
                 compact: bool, engine: str, profile: str) -> dict:
     """What the generated documents depend on. Changing any part makes an older bundle stale."""
-    import reviewed_documents
-    from document_artifacts import digest
-    from user_assets import user_profile_dir
+    from jobweaver import reviewed_documents
+    from jobweaver.document_artifacts import digest
+    from jobweaver.user_assets import user_profile_dir
 
     approved = Path(user_profile_dir(username), "approved", "cv.tex")
     policy = Path(user_profile_dir(username), "claim_policy.json")
@@ -79,13 +79,13 @@ def fingerprint(job: dict, username: str, config: dict, cv_text: str, model: str
 
 
 def pdf_pages(path) -> int | None:
-    from document_artifacts import inspect_pdf
+    from jobweaver.document_artifacts import inspect_pdf
     return inspect_pdf(path)['pages']
 
 
 def verify_current(output: Path, record: dict, inputs_digest: str, today: str) -> str | None:
     """None if the stored bundle is still the current, intact result; otherwise the reason it is not."""
-    from document_artifacts import digest, validate_pdf
+    from jobweaver.document_artifacts import digest, validate_pdf
 
     if record.get("schema") != SCHEMA:
         return "stored record has an unknown format"
@@ -143,7 +143,7 @@ def _result(job_id: str, ok: bool, **fields) -> dict:
 
 
 def _success(job_id, output, record, cached, cv_text, username, reason=None) -> dict:
-    import reviewed_documents
+    from jobweaver import reviewed_documents
 
     validation = []
     for kind, label in (("cv", "CV"), ("letter", "Cover letter")):
@@ -167,13 +167,13 @@ def _success(job_id, output, record, cached, cv_text, username, reason=None) -> 
 @operation('documents')
 def run(username: str, job_id: str, force: bool = False, language: str | None = None) -> tuple[dict, int]:
     """Return (result dict, exit code)."""
-    import db
-    from daily_scraper import _document_engine, _generate_docs_for_job, _job_folder, load_config
-    from cv_profiles import normalize_profile, select_cv_profile
-    import reviewed_documents
-    from document_artifacts import atomic_write, digest
-    from generators import resolve_document_model
-    from user_assets import resolve_user_path, user_drafts_dir, user_outputs_dir
+    from jobweaver import db
+    from jobweaver.daily_scraper import _document_engine, _generate_docs_for_job, _job_folder, load_config
+    from jobweaver.cv_profiles import normalize_profile, select_cv_profile
+    from jobweaver import reviewed_documents
+    from jobweaver.document_artifacts import atomic_write, digest
+    from jobweaver.generators import resolve_document_model
+    from jobweaver.user_assets import resolve_user_path, user_drafts_dir, user_outputs_dir
 
     user = db.get_user_by_username(username)
     if not user:
@@ -185,7 +185,7 @@ def run(username: str, job_id: str, force: bool = False, language: str | None = 
     config = load_config(username)
     auto = config.get("auto_generate", {})
     model, tone, compact = resolve_document_model(config), auto.get("tone", "professional"), bool(auto.get("compact_cv", False))
-    from user_assets import load_effective_cv
+    from jobweaver.user_assets import load_effective_cv
     cv_text = load_effective_cv(username)  # from the career record when the user has one
     if not cv_text.strip():
         return _result(job_id, False, errors=["CV-plaintext.txt not found or empty; cannot generate documents"]), 2
@@ -243,7 +243,7 @@ class _JsonParser(argparse.ArgumentParser):
 
 
 def main(argv=None) -> int:
-    parser = _JsonParser(description="Generate one job's CV and cover letter (see the module docstring).")
+    parser = _JsonParser(prog="python -m jobweaver.generate_for_job", description="Generate one job's CV and cover letter (see the module docstring).")
     parser.add_argument("--user", required=True, help="Jobweaver username, e.g. admin")
     parser.add_argument("--job", required=True, help="job id, e.g. li_4474888661")
     parser.add_argument("--force", action="store_true", help="rebuild even if a current bundle exists")

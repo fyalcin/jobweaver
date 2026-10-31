@@ -3,14 +3,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-import db
+from jobweaver import db
 
 # Point db at a throwaway SQLite file BEFORE importing server (server runs
 # db.init_db() at import time).
 _TMP = tempfile.mkdtemp(prefix="gj-rp-test-")
 db.set_db_path(os.path.join(_TMP, "test.db"))
 
-import server  # noqa: E402
+from jobweaver import server  # noqa: E402
 
 
 def _stub_ai(description, cv_text=None, model_name=None, denoise=True):

@@ -6,7 +6,7 @@ real file lives outside the repository. A complete fictional example: `examples/
 
 Check a record (prints `PATH:LINE: message` per problem; exit code 0 means accepted):
 
-    uv run python career_record.py check PATH
+    uv run python -m jobweaver.career_record check PATH
 
 ## Top level
 
@@ -85,7 +85,7 @@ emphasis on outcomes, never the ownership kind, tools, numbers, the kind of work
 
 ## Language
 
-Documents are English unless German is asked for (`generate_for_job.py --language de`, `language` in the web
+Documents are English unless German is asked for (`python -m jobweaver.generate_for_job --language de`, `language` in the web
 API, or the user setting `document_language`: `en`, `de` or `posting`). In German, letters use only claims,
 stretches and angles with German wording; a German CV needs German for everything it shows and otherwise names
 what is missing.

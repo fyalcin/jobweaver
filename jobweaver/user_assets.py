@@ -8,12 +8,13 @@ Outputs and drafts are always per-user — no root fallback.
 """
 
 import os
-from ui_preferences import DEFAULT_THEME, DEFAULT_FONT, normalize_preferences
+from jobweaver import PROJECT_ROOT
+from jobweaver.ui_preferences import DEFAULT_THEME, DEFAULT_FONT, normalize_preferences
 from pathlib import Path
 import re
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Where the database and profiles/ live: this folder by default, or JOBWEAVER_DATA_DIR (the demo, a container
+BASE_DIR = str(PROJECT_ROOT)
+# Where the database and profiles/ live: the repository root by default, or JOBWEAVER_DATA_DIR (the demo, a container
 # volume). Templates and other shared files always come from BASE_DIR.
 DATA_DIR = os.path.abspath(os.path.expanduser(os.environ.get("JOBWEAVER_DATA_DIR") or BASE_DIR))
 PROFILES_DIR = os.path.join(DATA_DIR, "profiles")
@@ -100,7 +101,7 @@ def load_effective_cv(username: str | None) -> str:
     """The text job scoring sees: from the user's career record if they have one (ADR-0004), else their
     own CV-plaintext.txt (never the repo-root example); standing notes are appended to a CV, never
     used as one. Empty when the user has no CV."""
-    import career_record
+    from jobweaver import career_record
     record, _ = career_record.for_user(username)
     cv = career_record.scoring_text(record) if record else ""
     cv_path = own_cv_path(username)

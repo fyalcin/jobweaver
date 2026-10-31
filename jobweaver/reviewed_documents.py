@@ -10,15 +10,15 @@ against the facts it cites. Layout is fixed. CVs keep every approved bullet unle
 compact mode is chosen.
 Existing custom sources remain available through manual Advanced editing.
 """
-from operation_budget import operation, check
+from jobweaver.operation_budget import operation, check
 import json
 import base64
 import unicodedata
 from datetime import date
 from pathlib import Path
 import re
-from document_artifacts import digest
-from user_assets import user_profile_dir
+from jobweaver.document_artifacts import digest
+from jobweaver.user_assets import user_profile_dir
 import logging
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ def evidence(user, cv):
     # Plaintext is kept verbatim. Standing notes/preferences never become facts.
     cv = (cv or '').split('\n\nRecent Experience & Standing Notes:')[0].strip()
     if not cv:
-        from user_assets import NO_CV_MESSAGE
+        from jobweaver.user_assets import NO_CV_MESSAGE
         raise ValueError(NO_CV_MESSAGE)
     facts = {}
     for line in cv.splitlines():
@@ -147,9 +147,9 @@ def generate(job, cv, user, engine, kind, profile, model, run_prompt, tone="", c
         if any((personal / name).is_dir() for name in ('base-cv-tex', 'base-cl-tex', 'base-typst')):
             raise ValueError('Your existing design needs a reviewed baseline before automatic generation. '
                              'Existing documents remain available in the library for manual editing.')
-    from cv_profiles import profile_instruction
+    from jobweaver.cv_profiles import profile_instruction
     preference = profile_instruction(profile, user=user)
-    from user_assets import resolve_user_path
+    from jobweaver.user_assets import resolve_user_path
     config_path = Path(resolve_user_path(user, 'scraper_config.json'))
     config = json.loads(config_path.read_text()) if config_path.exists() else {}
     extra = config.get('document_instructions', {}).get('cv' if kind == 'cv' else 'cover_letter', '')
@@ -489,7 +489,7 @@ def verify_letter(letter, facts, identity, policy, model, run_prompt):
 
 
 def letter_prompt(store, facts, job, preference, language, current=None, instruction='', plan=None, policy=None):
-    from generators import HUMANIZING_STRICT_INSTRUCTIONS, HUMANIZING_DE_ADDENDUM
+    from jobweaver.generators import HUMANIZING_STRICT_INSTRUCTIONS, HUMANIZING_DE_ADDENDUM
     posting = _posting(job)
     research = str(job.get('company_research') or '')[:2000] if job.get('use_research_in_docs', True) is not False else ''
     task = ('Revise the current letter according to the request. Keep everything else unchanged.'
@@ -559,14 +559,14 @@ def _parse_json(text):
 
 
 def _settings(user):
-    from user_assets import resolve_user_path
+    from jobweaver.user_assets import resolve_user_path
     path = Path(resolve_user_path(user, 'scraper_config.json')) if user else None
     return json.loads(path.read_text()) if path and path.exists() else {}
 
 
 def verifier_model(user, writer_model=None):
     """Explicit verifier choice, or the custom writer's route, or the hosted default."""
-    from generators import resolve_document_model, is_custom_model
+    from jobweaver.generators import resolve_document_model, is_custom_model
     settings = _settings(user)
     configured = settings.get('letter_verifier_model')
     if configured is not None:
@@ -666,7 +666,7 @@ def render_letter(store, letter, engine, job):
     recipient = [str(job.get('company') or ''), str(job.get('title') or '')]
     paragraphs = [p['text'] for p in content['paragraphs']]
     if store.get('record'):
-        import career_cv
+        from jobweaver import career_cv
         body = [*career_cv.header(store['record'], store['family']), r'\vspace{16pt}',
                 latex_text(recipient[0]) + r'\par', latex_text(recipient[1]) + r'\par', r'\vspace{6pt}',
                 latex_text(letter['date']) + r'\par', r'\vspace{12pt}', r'\setlength{\parskip}{8pt}',
@@ -736,7 +736,7 @@ def render_cv(store, ids, engine):
 
 @operation()
 def grounded_edit(source, instruction, user, model, run_prompt):
-    from user_assets import load_effective_cv
+    from jobweaver.user_assets import load_effective_cv
     match = re.match(r'(?:% |// )GIMME_APPROVED ([A-Za-z0-9+/=]+)\n', source)
     state = json.loads(base64.b64decode(match.group(1), validate=True)) if match else {}
     if state.get('kind') == 'letter' and state.get('version') == 2:
@@ -767,7 +767,7 @@ def grounded_edit(source, instruction, user, model, run_prompt):
 
 def _edit_letter(source, state, instruction, user, model, run_prompt):
     """Revise a checked letter by request; the revision passes the same evidence check."""
-    from user_assets import load_effective_cv
+    from jobweaver.user_assets import load_effective_cv
     if re.search(r'\b(translat\w*|font|margin|layout)\b', instruction, re.I):
         raise ValueError('Letter edits change wording only. Translation and layout changes need manual review.')
     record, record_text = career_record_for(user)
@@ -856,7 +856,7 @@ WORK_ENTRIES = ('role', 'project', 'contribution')
 
 def career_record_for(user):
     """(record, text) when the user has a career record, else (None, None). A record with errors raises."""
-    import career_record
+    from jobweaver import career_record
     return career_record.for_user(user)
 
 
@@ -879,7 +879,7 @@ def record_store(record, text, family, language='en'):
 
     Personal applicant facts (personal- ids) remain separate from work claims.
     In German only claims, stretches, angles and personal facts with approved German wording are offered."""
-    import career_record
+    from jobweaver import career_record
     source_text, record = text, career_record.localise(record, language)
     citable, identity, claims, entry_of, stretches, personal = {}, set(), {}, {}, {}, set()
     for fact in record.get('applicant_facts', []):
@@ -1021,7 +1021,7 @@ def plan_record_letter(store, job, preference, language, model, run_prompt, cap,
 def _generate_from_record(record, text, job, user, engine, kind, profile, model, run_prompt, tone, notes, language='en'):
     family = record_family(record, job, profile)
     if kind == 'cv':
-        import career_cv
+        from jobweaver import career_cv
         source = career_cv.render(record, family, language)
         rendered = source if engine == 'latex' else render_approved_typst(source)
         state = {'version': 3, 'kind': 'cv', 'source_hash': digest(text), 'family': family, 'engine': engine,

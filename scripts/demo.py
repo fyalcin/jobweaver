@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--seed-only", type=Path, help="Create demo data in an empty directory, then exit.")
     args = parser.parse_args()
     if args.seed_only:
-        from demo_data import seed
+        from jobweaver.demo_data import seed
         seed(args.seed_only)
         return 0
     if not (ROOT / "webapp" / "dist" / "index.html").is_file():
@@ -34,7 +34,7 @@ def main():
                    PYTHONDONTWRITEBYTECODE="1")
         print(f"Read-only demo: http://127.0.0.1:{args.port} (sign in: demo / demo)", flush=True)
         print("All applicant and company data is fictional. Ctrl+C stops the demo. Run again to reset.", flush=True)
-        child = subprocess.Popen([sys.executable, "-m", "uvicorn", "server:app", "--host", "127.0.0.1",
+        child = subprocess.Popen([sys.executable, "-m", "uvicorn", "jobweaver.server:app", "--host", "127.0.0.1",
                                   "--port", str(args.port)], cwd=ROOT, env=env)
         previous = signal.signal(signal.SIGTERM, lambda *_: child.terminate())
         try:

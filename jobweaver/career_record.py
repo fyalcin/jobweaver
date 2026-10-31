@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Career record: the one file of everything documents may say about a user (ADR-0004).
 
-    uv run python career_record.py check PATH
-    uv run python career_record.py text PATH     # plain text for job scoring (no excluded claims)
+    uv run python -m jobweaver.career_record check PATH
+    uv run python -m jobweaver.career_record text PATH     # plain text for job scoring (no excluded claims)
 
 The record is YAML (format: docs/career-record/FORMAT.md; terms: GLOSSARY.md). Jobweaver owns only
 the format and this checker; a user's real record lives outside the repository and is read from a
@@ -216,7 +216,7 @@ class _Checker:
         return {family for family in angles if family in families}
 
     def claim(self, claim, path):
-        from reviewed_documents import TECH_TERMS, _numbers
+        from jobweaver.reviewed_documents import TECH_TERMS, _numbers
         claim = self.fields(claim, path, CLAIM_KEYS, 'a claim')
         self.identifier(claim.get('id'), path + ('id',), 'claim')
         kind, text = claim.get('ownership'), claim.get('text') if isinstance(claim.get('text'), str) else ''
@@ -296,7 +296,7 @@ class _Checker:
 
     def same_facts(self, english, german, path):
         """A German wording keeps the English wording's numbers and tool names (a translation, not a rewrite)."""
-        from reviewed_documents import TECH_TERMS, _numbers
+        from jobweaver.reviewed_documents import TECH_TERMS, _numbers
         digits = lambda text: {re.sub(r'[.,]', '', n) for n in _numbers(text)}
         if digits(english) != digits(german):
             self.error(path, 'the German wording must have the same numbers as the English: '
@@ -329,7 +329,7 @@ def check(path):
 def path_for_user(username):
     """Where a user's career record is: `career_record` in their settings, else profiles/<user>/career_record.yaml."""
     import json
-    from user_assets import resolve_user_path, user_profile_dir
+    from jobweaver.user_assets import resolve_user_path, user_profile_dir
     if not username:
         return None
     settings = Path(resolve_user_path(username, 'scraper_config.json'))
@@ -346,7 +346,7 @@ def for_user(username):
     errors = [p for p in check(path) if not p.warning]
     if errors:
         raise ValueError(f'The career record {path} has errors (line {errors[0].line}: {errors[0].message}); '
-                         'run career_record.py check')
+                         'run python -m jobweaver.career_record check')
     record, _ = load(path)
     return record, path.read_text(encoding='utf-8')
 
@@ -441,12 +441,12 @@ def summary(path):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 2 or argv[0] not in ('check', 'text'):
-        print('usage: career_record.py check PATH | career_record.py text PATH', file=sys.stderr)
+        print('usage: python -m jobweaver.career_record check PATH | python -m jobweaver.career_record text PATH', file=sys.stderr)
         return 2
     path = argv[1]
     if argv[0] == 'text':  # the plain-text version used for job scoring
         if any(not p.warning for p in check(path)):
-            print('the career record has errors; run career_record.py check', file=sys.stderr)
+            print('the career record has errors; run python -m jobweaver.career_record check', file=sys.stderr)
             return 1
         sys.stdout.write(scoring_text(load(path)[0]))
         return 0

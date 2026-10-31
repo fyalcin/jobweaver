@@ -11,7 +11,7 @@ class DataDirTest(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if k != "JOBWEAVER_DATA_DIR"}
         if env_value is not None:
             env["JOBWEAVER_DATA_DIR"] = env_value
-        code = "import db, user_assets; print(db.DB_PATH); print(user_assets.PROFILES_DIR); print(user_assets.BASE_DIR)"
+        code = "from jobweaver import db, user_assets; print(db.DB_PATH); print(user_assets.PROFILES_DIR); print(user_assets.BASE_DIR)"
         out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True)
         return out.stdout.split()
 

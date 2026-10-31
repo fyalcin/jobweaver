@@ -6,8 +6,8 @@ import shutil
 import tempfile
 import unittest
 
-import db
-import mark_applied
+from jobweaver import db
+from jobweaver import mark_applied
 
 
 class MarkAppliedTest(unittest.TestCase):

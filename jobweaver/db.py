@@ -68,8 +68,9 @@ from datetime import datetime
 from typing import Any, Optional
 
 import pandas as pd
-from german import normalize_german_level, requires_german
-from user_assets import DATA_DIR
+from jobweaver import PROJECT_ROOT
+from jobweaver.german import normalize_german_level, requires_german
+from jobweaver.user_assets import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ def _ensure_default_user(conn: sqlite3.Connection) -> int:
         "INSERT INTO users (username, display_name, password_hash, created_at) VALUES (?, ?, NULL, ?)",
         (username, username.capitalize(), datetime.now().isoformat()),
     )
-    logger.info("Created default user '%s' (set a password via manage_users.py)", username)
+    logger.info("Created default user '%s' (set a password via python -m jobweaver.manage_users)", username)
     return conn.execute("SELECT id FROM users ORDER BY id LIMIT 1").fetchone()["id"]
 
 
@@ -388,7 +389,7 @@ def _migrate_from_json(conn: sqlite3.Connection, default_user_id: int) -> None:
     if count > 0:
         return  # Already populated — skip migration
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = str(PROJECT_ROOT)
     main_json = os.path.join(base_dir, "all_jobs_persistent.json")
 
     if not os.path.exists(main_json):
@@ -557,7 +558,7 @@ def _row_to_user(row: sqlite3.Row) -> dict:
 
 def create_user(username: str, password_hash: Optional[str] = None,
                 display_name: Optional[str] = None, telegram_chat_id: Optional[str] = None) -> dict:
-    from user_assets import normalize_username, user_profile_dir
+    from jobweaver.user_assets import normalize_username, user_profile_dir
     username = normalize_username(username)
     conn = get_conn()
     try:

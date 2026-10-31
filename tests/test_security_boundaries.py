@@ -9,10 +9,10 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import auth
-import db
-import server
-import user_assets
+from jobweaver import auth
+from jobweaver import db
+from jobweaver import server
+from jobweaver import user_assets
 
 
 class SecurityBoundaryTest(unittest.TestCase):
@@ -99,7 +99,7 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertEqual(second.get('/api/auth/me').status_code, 200)
 
     def test_password_change_revokes_existing_sessions(self):
-        import manage_users
+        from jobweaver import manage_users
         from types import SimpleNamespace
         with patch('getpass.getpass', return_value='fictional-new-password'):
             self.assertEqual(manage_users.cmd_passwd(SimpleNamespace(username='alice')), 0)
@@ -109,7 +109,7 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_deleted_user_files_cannot_be_inherited_by_a_new_user(self):
-        import manage_users
+        from jobweaver import manage_users
         from types import SimpleNamespace
         secret = Path(user_assets.user_profile_dir('bob'), 'CV-plaintext.txt')
         secret.write_text('BOB_ONLY_FICTIONAL_SENTINEL')
@@ -139,7 +139,7 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertGreater(int(response.headers['retry-after']), 0)
         import time
-        with patch('server.time.time', return_value=time.time() + 61):
+        with patch('jobweaver.server.time.time', return_value=time.time() + 61):
             response = self.client.post('/api/auth/login', json={'username': 'unknown', 'password': 'wrong'})
         self.assertEqual(response.status_code, 401)
 
@@ -150,7 +150,7 @@ class SecurityBoundaryTest(unittest.TestCase):
             valid = verify(password, stored)
             db.update_user_fields(self.alice['id'], password_hash=replacement)
             return valid
-        with patch('auth.verify_password', side_effect=reset_after_verification):
+        with patch('jobweaver.auth.verify_password', side_effect=reset_after_verification):
             response = self.client.post('/api/auth/login', json={
                 'username': 'alice', 'password': 'fictional-alice-password'})
         self.assertEqual(response.status_code, 401)

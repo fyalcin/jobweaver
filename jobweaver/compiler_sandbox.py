@@ -22,7 +22,7 @@ import signal
 import subprocess
 import sys
 import time
-from operation_budget import current, check
+from jobweaver.operation_budget import current, check
 
 TOOLS = {'pdflatex', 'typst', 'latexdiff', 'pdfinfo', 'pdftoppm', 'pdftotext'}
 # Realistic fictional CVs give ~10 KiB latexdiff output and small diagnostics.
@@ -87,7 +87,7 @@ def run_tool(command, cwd, *, assets=None, timeout=45):
     brew = Path('/home/linuxbrew/.linuxbrew')
     if Path(binary).resolve().is_relative_to(brew):
         roots.append(str(brew))
-    import user_assets
+    from jobweaver import user_assets
     protected = [Path(path).resolve() for path in
                  (user_assets.BASE_DIR, user_assets.DATA_DIR, user_assets.PROFILES_DIR)]
     for root in roots:
@@ -113,7 +113,7 @@ def run_tool(command, cwd, *, assets=None, timeout=45):
 
     # TeX selects its format from argv[0]; retain the pdflatex symlink name.
     arguments += ['--', binary, *(mapped(arg) for arg in command[1:])]
-    import capacity
+    from jobweaver import capacity
     with capacity.acquire('native') as lease:
         # The effective deadline starts after admission and never passes the operation's.
         seconds = min(timeout, budget.remaining()) if budget else timeout

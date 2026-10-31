@@ -21,27 +21,28 @@ import json
 import uuid
 import base64
 from pathlib import Path
-from document_artifacts import (atomic_write, decode_pdf, digest, document_lock, active_source, select_source,
+from jobweaver.document_artifacts import (atomic_write, decode_pdf, digest, document_lock, active_source, select_source,
                                 matching_build, record_build)
-from job_policy import eligibility, qualifies, fingerprint, apply_rating, normalize_rating_config, rating_sort_key
-import reviewed_documents
+from jobweaver import PROJECT_ROOT
+from jobweaver.job_policy import eligibility, qualifies, fingerprint, apply_rating, normalize_rating_config, rating_sort_key
+from jobweaver import reviewed_documents
 
 # Local imports
-import db
-import auth
-import demo_mode
-import user_assets
-from ui_preferences import DEFAULT_THEME, DEFAULT_FONT, normalize_theme, normalize_font
-import web_security
-from background_queue import BackgroundQueue, bounded_results
-from operation_budget import (operation, check, current, OperationTerminated, OperationDeadline, OperationCancelled,
+from jobweaver import db
+from jobweaver import auth
+from jobweaver import demo_mode
+from jobweaver import user_assets
+from jobweaver.ui_preferences import DEFAULT_THEME, DEFAULT_FONT, normalize_theme, normalize_font
+from jobweaver import web_security
+from jobweaver.background_queue import BackgroundQueue, bounded_results
+from jobweaver.operation_budget import (operation, check, current, OperationTerminated, OperationDeadline, OperationCancelled,
                               OperationExhausted, OperationBusy, QuotaExceeded)
-import model_usage
-from request_limits import RequestBodyLimitMiddleware
-from input_limits import (ScrapeInput, CollectionConfig, LinkedinScraperConfig, KarriereScraperConfig,
+from jobweaver import model_usage
+from jobweaver.request_limits import RequestBodyLimitMiddleware
+from jobweaver.input_limits import (ScrapeInput, CollectionConfig, LinkedinScraperConfig, KarriereScraperConfig,
                           ModelName, Identifier, ShortText, SourceText, Instruction, PdfBase64, MAX_BATCH_JOBS,
                           AutoGenerateConfig, DocumentInstructions)
-from user_assets import (
+from jobweaver.user_assets import (
     resolve_user_path,
     user_outputs_dir,
     user_drafts_dir,
@@ -53,9 +54,9 @@ from user_assets import (
     own_cv_path,
     NO_CV_MESSAGE,
 )
-from german import german_level_compatible, normalize_german_level
-import scrapers as _scrapers
-from generators import (
+from jobweaver.german import german_level_compatible, normalize_german_level
+from jobweaver import scrapers as _scrapers
+from jobweaver.generators import (
     write_latex,
     compile_latex, compile_latex_diff, refine_document_with_feedback,
     convert_pdf_to_images, apply_route_cheapest, research_company_sonar,
@@ -63,7 +64,7 @@ from generators import (
     compile_studio_document, parse_pdflatex_error, ai_surgical_edit_latex,
     compile_typst, parse_typst_error, ai_surgical_edit_typst,
 )
-from cv_profiles import available_profiles, normalize_profile, profile_label, select_cv_profile
+from jobweaver.cv_profiles import available_profiles, normalize_profile, profile_label, select_cv_profile
 
 # --- Configure Logging ---
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -629,7 +630,7 @@ def _try_generate_cv_pdf(job_id: Identifier, model_name: str, tone: str, user: d
     compact = load_user_config_dict(user).get('auto_generate', {}).get('compact_cv', False) if compact is None else compact
     profile = select_cv_profile(job, normalize_profile(cv_profile or job.get("cv_profile_override"), username), user=username)['profile']
     try:
-        from generators import run_ai_prompt
+        from jobweaver.generators import run_ai_prompt
         source = reviewed_documents.generate(job, cv, username, selected_engine, 'cv', profile, model_name, run_ai_prompt, tone=tone, compact=compact, language=language)
         check()
         result = compile_job_document(job_id, JobDocCompileRequest(document_type='cv', tex=source), user=user)
@@ -654,7 +655,7 @@ def _try_generate_letter_pdf(job_id: Identifier, model_name: str, tone: str, use
     selected_engine = engine or load_document_engine_config(user)[0]
     profile = select_cv_profile(job, normalize_profile(job.get("cv_profile_override"), username), user=username)['profile']
     try:
-        from generators import run_ai_prompt
+        from jobweaver.generators import run_ai_prompt
         source = reviewed_documents.generate(job, cv, username, selected_engine, 'letter', profile, model_name, run_ai_prompt, tone=tone, language=language)
         check()
         result = compile_job_document(job_id, JobDocCompileRequest(document_type='letter', tex=source), user=user)
@@ -1089,7 +1090,7 @@ def _user_asset_save_path(username: Optional[str], relative: str) -> str:
     """File a user's edits to a root-fallback asset are written to.
 
     All repo-root asset files (CV-plaintext.txt, base-cv-tex/, base-cl-tex/,
-    scraper_config.json, cv_profiles.py) are user-agnostic placeholder/base
+    scraper_config.json) and jobweaver/cv_profiles.py are user-agnostic placeholder/base
     templates safe to commit. Reads fall back to them via
     `resolve_user_path`, but EVERY user's edits — default user included —
     go to `profiles/<user>/<relative>` (created on first save), so personal
@@ -1101,7 +1102,7 @@ def _user_asset_save_path(username: Optional[str], relative: str) -> str:
 @app.get("/api/cv")
 def get_cv(user: dict = Depends(get_current_user)):
     username = user.get("username")
-    import career_record
+    from jobweaver import career_record
     record_path = career_record.path_for_user(username)
     if record_path:  # ADR-0004: the text comes from the career record and is edited there
         record, _ = career_record.for_user(username)
@@ -1133,7 +1134,7 @@ def get_cv(user: dict = Depends(get_current_user)):
 @app.put("/api/cv")
 def save_cv(body: CvTextPayload, user: dict = Depends(get_current_user)):
     username = user.get("username")
-    import career_record
+    from jobweaver import career_record
     if career_record.path_for_user(username):
         raise HTTPException(status_code=409, detail="Your CV text comes from your career record; edit the record instead.")
     cv_path = _user_asset_save_path(username, "CV-plaintext.txt")
@@ -2236,8 +2237,8 @@ def fetch_job_url(req: FetchJobUrlRequest, user: dict = Depends(get_current_user
     The page's schema.org JobPosting block is read first (job_jsonld.py); site heuristics are the fallback.
     Only public http(s) addresses are fetched (safe_fetch.py)."""
     from bs4 import BeautifulSoup
-    import job_jsonld
-    import safe_fetch
+    from jobweaver import job_jsonld
+    from jobweaver import safe_fetch
 
     try:
         resp = safe_fetch.fetch_page(req.url)
@@ -3105,7 +3106,7 @@ def delete_studio_document(doc_id: Identifier, user: dict = Depends(get_current_
 
 
 # Serve the built frontend from the same origin as the API. Vite remains available for development.
-_frontend = Path(__file__).resolve().parent / "webapp" / "dist"
+_frontend = PROJECT_ROOT / "webapp" / "dist"
 if _frontend.is_dir():
     from fastapi.staticfiles import StaticFiles
     app.mount("/", StaticFiles(directory=_frontend, html=True), name="webapp")
@@ -3113,4 +3114,4 @@ if _frontend.is_dir():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("jobweaver.server:app", host="127.0.0.1", port=8000, reload=False)
