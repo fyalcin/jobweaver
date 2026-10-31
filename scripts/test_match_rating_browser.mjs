@@ -31,11 +31,14 @@ try {
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
   await context.addInitScript(() => localStorage.setItem('jobweaver.jobs-view.demo', JSON.stringify({ statusFilter: 'All', scrapeDateFilter: '__all', minMatchFilter: '85', sortConfig: { key: 'match_score', direction: 'desc' } })));
-  let original, fixture;
+  let original, fixture, jobsRequests = 0, releaseLateJobs;
+  const lateJobs = new Promise(done => { releaseLateJobs = done; });
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== base && !['data:', 'blob:'].includes(url.protocol)) return route.abort();
     if (url.pathname === '/api/jobs' && route.request().method() === 'GET') {
+      // The app loads jobs twice at startup; hold the second answer to test a late refresh.
+      if (++jobsRequests === 2) await lateJobs;
       original ||= await (await route.fetch()).json();
       const template = original.find(job => job.company === 'Cumulus Research') || original[0];
       const check = (requirement, coverage, importance = 'must') => ({ requirement, coverage, importance, posting_quote: `${requirement} required.`, cv_quote: coverage === 'missing' ? '' : `I used ${requirement}.` });
@@ -61,6 +64,12 @@ try {
   await page.getByRole('checkbox', { name: 'Select Great role 0', exact: true }).check();
   await page.locator('.calm-batch-bar').waitFor();
   assert.equal(await page.locator('.job-detail-page').count(), 0, 'Selecting a row must not open it.');
+  assert(jobsRequests >= 2, 'Expected to hold the second jobs request.');
+  const lateRefresh = page.waitForResponse(response => new URL(response.url()).pathname === '/api/jobs');
+  releaseLateJobs();
+  await (await lateRefresh).finished();
+  await delay(100);
+  assert(await page.getByRole('checkbox', { name: 'Select Great role 0', exact: true }).isChecked(), 'A late refresh cleared the selection.');
   await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
   assert.equal(await page.locator('.calm-batch-bar').count(), 0);
   await page.getByRole('button', { name: 'Actions for Great role 0', exact: true }).click();

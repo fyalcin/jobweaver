@@ -25,6 +25,7 @@ import {
 import { STATUS_CONFIG } from '../constants/status'
 import { sourceLabel } from '../constants/ratings'
 import { formatDateDisplay } from '../constants/dates'
+import { PageHeader } from './PageHeader'
 
 const SKILLS_PAGE_SIZE = 20
 
@@ -36,12 +37,22 @@ function sourceColor(source) {
   return `var(--chart-source-${category})`
 }
 
+function ratingBarFill(rating) {
+  const key = String(rating || '').toLowerCase()
+  if (key.includes('blocked')) return 'color-mix(in srgb, var(--danger-color) 72%, var(--surface-card))'
+  if (key.includes('great')) return 'var(--primary-color)'
+  if (key.includes('good')) return 'color-mix(in srgb, var(--primary-color) 76%, var(--surface-card))'
+  if (key.includes('ok')) return 'color-mix(in srgb, var(--primary-color) 52%, var(--surface-card))'
+  if (key.includes('poor')) return 'color-mix(in srgb, var(--primary-color) 32%, var(--surface-card))'
+  return 'color-mix(in srgb, var(--text-muted) 42%, var(--surface-card))'
+}
+
 function CustomTooltip({ active, payload, label, labelFormatter }) {
   if (active && payload && payload.length) {
     const rawLabel = label ?? payload[0]?.name
     const displayLabel = labelFormatter ? labelFormatter(rawLabel) : rawLabel
     return (
-      <div style={{ background: 'var(--surface-color)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem' }}>
+      <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem', boxShadow: 'var(--shadow-md)' }}>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '2px' }}>{displayLabel}</p>
         <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{payload[0].value}</p>
       </div>
@@ -54,7 +65,7 @@ function SkillsTooltip({ active, payload }) {
   if (active && payload && payload.length) {
     const { skill, count } = payload[0].payload
     return (
-      <div style={{ background: 'var(--surface-color)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem' }}>
+      <div style={{ background: 'var(--surface-card)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem', boxShadow: 'var(--shadow-md)' }}>
         <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '2px' }}>{skill}</p>
         <p style={{ color: 'var(--text-secondary)' }}>{count} job{count !== 1 ? 's' : ''}</p>
       </div>
@@ -100,21 +111,33 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
 
   if (statsLoading) {
     return (
-      <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-        <RefreshCw className="spinner" size={32} style={{ margin: '0 auto 1rem', display: 'block' }} />
-        <p>Loading statistics…</p>
+      <div className="page-shell">
+        <PageHeader
+          title="Analytics"
+          subtitle="Track posting volume, evidence-based match ratings, pipeline conversion, and recurring skills."
+        />
+        <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <RefreshCw className="spinner" size={32} style={{ margin: '0 auto 1rem', display: 'block' }} />
+          <p>Loading statistics…</p>
+        </div>
       </div>
     )
   }
 
   if (!stats) {
     return (
-      <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-        <BarChart2 size={40} style={{ margin: '0 auto 1rem', opacity: 0.4, display: 'block' }} />
-        <p>No stats available yet.</p>
-        <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={fetchStats}>
-          <RefreshCw size={16} /> Load Stats
-        </button>
+      <div className="page-shell">
+        <PageHeader
+          title="Analytics"
+          subtitle="Track posting volume, evidence-based match ratings, pipeline conversion, and recurring skills."
+        />
+        <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <BarChart2 size={40} style={{ margin: '0 auto 1rem', opacity: 0.4, display: 'block' }} />
+          <p>No stats available yet.</p>
+          <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={fetchStats}>
+            <RefreshCw size={16} /> Load Stats
+          </button>
+        </div>
       </div>
     )
   }
@@ -127,7 +150,18 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
   const skillsChartHeight = Math.max(200, skillsSlice.length * 36)
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="page-shell">
+      <PageHeader
+        title="Analytics"
+        subtitle="Track posting volume, evidence-based match ratings, pipeline conversion, and recurring skills."
+        actions={
+          <button type="button" className="btn btn-secondary btn-sm" onClick={fetchStats}>
+            <RefreshCw size={14} />
+            <span>Refresh</span>
+          </button>
+        }
+      />
+
       {/* Top metrics - 2-tier structure: Hero metrics + Pipeline status */}
       <div className="stats-hero-grid">
         <div className="metric-card stats-hero-card">
@@ -175,8 +209,8 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
                     <YAxis allowDecimals={false} width={36} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                      {stats.match_rating_distribution.map((_, i) => (
-                        <Cell key={i} fill={`color-mix(in srgb, var(--primary-color) ${40 + (i / Math.max(1, stats.match_rating_distribution.length - 1)) * 60}%, var(--surface-card))`} />
+                      {stats.match_rating_distribution.map((entry, i) => (
+                        <Cell key={i} fill={ratingBarFill(entry.rating)} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -322,7 +356,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
                 padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem',
-                background: 'rgba(99,102,241,0.1)',
+                background: 'var(--nav-soft-bg)',
                 color: 'var(--text-secondary)',
                 border: '1px solid var(--border-color)',
               }}>
@@ -332,8 +366,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
             {/* Refresh button */}
             <button
               id="skills-refresh-btn"
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }}
+              className="btn btn-secondary btn-sm"
               disabled={skillsLoading}
               onClick={() => {
                 setSkillsVisible(SKILLS_PAGE_SIZE)
@@ -347,8 +380,7 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
             {skillsStats && !skillsLoading && skillsStats.skills.length > 0 && (
               <button
                 id="skills-export-btn"
-                className="btn btn-secondary"
-                style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }}
+                className="btn btn-secondary btn-sm"
                 onClick={() => exportSkillsStats(skillsStats)}
                 title="Download skills data as JSON"
               >
@@ -451,12 +483,6 @@ export function StatsTab({ stats, statsLoading, fetchStats, skillsStats, skillsL
             </div>
           </>
         )}
-      </div>
-
-      <div style={{ textAlign: 'right', marginTop: '1rem' }}>
-        <button className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={fetchStats}>
-          <RefreshCw size={14} /> Refresh Stats
-        </button>
       </div>
     </div>
   )

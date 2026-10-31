@@ -5,15 +5,16 @@ import React from 'react';
 import { CalendarDays, CheckCircle2, RefreshCw, Briefcase, ExternalLink, Download, FileText, Mail, XCircle, Wand2 } from 'lucide-react';
 import { StatusBadge } from '../StatusControls';
 import { formatDateDisplay } from '../../constants/dates';
+import { PageHeader } from '../PageHeader';
 
 function getFriendlyDateLabel(dateStr) {
   if (!dateStr) return '';
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  
+
   const yesterdayDate = new Date(Date.now() - 86400000);
   const yesterdayStr = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
-  
+
   const formatted = formatDateDisplay(dateStr);
   if (dateStr === todayStr) return `${formatted} (Today)`;
   if (dateStr === yesterdayStr) return `${formatted} (Yesterday)`;
@@ -30,12 +31,29 @@ export function DailyTab({
   const hasOlderDates = dailyDates.length > 4;
 
   return (
-    <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+    <div className="page-shell">
+      <PageHeader
+        title="Daily Matches"
+        badge={dailyJobs.length > 0 ? `${dailyJobs.length} qualifying` : undefined}
+        subtitle="Qualifying postings from each daily run using your configured minimum rating and eligibility checks."
+        actions={
+          dailyJobs.length > 0 ? (
+            <button
+              disabled={demo}
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                dailyJobs.filter(j => j.status !== 'applied').forEach(j => updateJobStatus(j.id, 'applied'));
+              }}
+            >
+              <CheckCircle2 size={14} />
+              <span>Mark All Applied</span>
+            </button>
+          ) : null
+        }
+      />
+
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <h2 className="card-title"><CalendarDays size={20} /> Daily Scraped Results</h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Daily matches use the configured minimum rating and eligibility checks. Historical entries need re-rating before comparison.
-        </p>
         {dailyDates.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <CalendarDays size={40} style={{ margin: '0 auto 1rem', opacity: 0.4, display: 'block' }} />
@@ -83,19 +101,6 @@ export function DailyTab({
                   </optgroup>
                 </select>
               </div>
-            )}
-
-            {dailyJobs.length > 0 && (
-              <button disabled={demo}
-                type="button"
-                className="btn btn-secondary daily-mark-all-btn"
-                onClick={() => {
-                  dailyJobs.filter(j => j.status !== 'applied').forEach(j => updateJobStatus(j.id, 'applied'));
-                }}
-              >
-                <CheckCircle2 size={15} />
-                <span>Mark All Applied</span>
-              </button>
             )}
           </div>
         )}
@@ -178,12 +183,12 @@ export function DailyTab({
                     {job.status === 'applied' ? 'Applied ✓' : 'Apply'}
                   </button>
                   <button disabled={demo}
-                    onClick={() => updateJobStatus(job.id, job.status === 'rejected' ? 'new' : 'rejected')}
-                    className={`btn daily-action-btn ${job.status === 'rejected' ? 'daily-btn-skipped' : 'btn-secondary'}`}
+                    onClick={() => updateJobStatus(job.id, job.status === 'not_interested' ? 'new' : 'not_interested')}
+                    className={`btn daily-action-btn ${job.status === 'not_interested' ? 'daily-btn-skipped' : 'btn-secondary'}`}
                     style={{ flex: 1 }}
                   >
                     <XCircle size={14} />
-                    {job.status === 'rejected' ? 'Skipped' : 'Skip'}
+                    {job.status === 'not_interested' ? 'Skipped' : 'Skip'}
                   </button>
                   <button
                     onClick={() => handleGenerateDocs(job)}

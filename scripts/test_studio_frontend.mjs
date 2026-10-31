@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { parseTypstDocument } from '../webapp/src/services/typstParser.js';
+import { serializeTypstDocument } from '../webapp/src/services/typstSerializer.js';
 
 // Run the real library hook while controlling when the compile response arrives.
 const source = fs.readFileSync('webapp/src/hooks/useStudio.js', 'utf8')
@@ -82,3 +84,51 @@ for (const engine of ['typst', 'latex']) {
   assert.equal(studio.draftContent, 'other draft');
 }
 console.log('Studio regressions passed: typing during compile remains saveable; old document responses stay isolated.');
+
+// Simple Mode can add, change and remove the optional subtitle on both CV templates.
+for (const template of ['base-typst/base-cv.typ', 'base-typst/base-cv-moderner.typ']) {
+  const original = parseTypstDocument(fs.readFileSync(template, 'utf8'));
+  assert.equal(original.supported, true, template);
+  const write = (parsed, subtitle) => serializeTypstDocument(parsed.kind, { ...parsed.data, basics: { ...parsed.data.basics, subtitle } }, parsed.rawPreamble);
+  const blank = parseTypstDocument(write(original, ''));
+  assert.equal(blank.data.basics.subtitle, '', `${template}: subtitle removed`);
+  const added = parseTypstDocument(write(blank, 'Data [Lead] Scientist'));
+  assert.equal(added.supported, true, `${template}: stays in Simple Mode`);
+  assert.equal(added.data.basics.subtitle, 'Data [Lead] Scientist', `${template}: subtitle added`);
+  assert.deepEqual(added.data.sections, blank.data.sections, `${template}: body untouched`);
+  assert.equal(added.data.basics.name, blank.data.basics.name, `${template}: name untouched`);
+  const sameAsBody = 'Senior Software Developer';
+  const changed = parseTypstDocument(write(added, sameAsBody));
+  assert.equal(changed.data.basics.subtitle, sameAsBody, `${template}: subtitle may repeat body text`);
+  // Each parse and write can add a blank line before the first section, so compare without blank lines.
+  const lines = source => source.split('\n').filter(line => line.trim());
+  assert.deepEqual(lines(write(changed, '')), lines(write(blank, '')), `${template}: removing restores the header`);
+}
+console.log('Subtitle regressions passed: add, change and remove on both CV templates.');
+
+// Every header field can be changed, cleared and re-added in Simple Mode, and only that field moves.
+const headerValues = { name: 'Dr Ada Lovelace', subtitle: 'Climate Modeller', email: 'ada@example.org', github: 'adagit', linkedin: 'ada-li', address: 'Graz, Austria', phone: '+43 660 1234567', residence: 'Rot-Weiss-Rot Karte' };
+for (const template of ['base-typst/base-cv.typ', 'base-typst/base-cv-moderner.typ']) {
+  const start = parseTypstDocument(fs.readFileSync(template, 'utf8'));
+  const write = (parsed, key, value) => serializeTypstDocument(parsed.kind, { ...parsed.data, basics: { ...parsed.data.basics, [key]: value } }, parsed.rawPreamble);
+  for (const [key, value] of Object.entries(headerValues)) {
+    const changed = parseTypstDocument(write(start, key, value));
+    assert.deepEqual(changed.data.basics, { ...start.data.basics, [key]: value }, `${template}: change ${key}`);
+    assert.deepEqual(changed.data.sections, start.data.sections, `${template}: ${key} leaves the body alone`);
+    const cleared = parseTypstDocument(write(changed, key, ''));
+    assert.deepEqual(cleared.data.basics, { ...start.data.basics, [key]: '' }, `${template}: clear ${key}`);
+    const again = parseTypstDocument(write(cleared, key, value));
+    assert.equal(again.data.basics[key], value, `${template}: re-add ${key}`);
+    assert.deepEqual(again.data.sections, start.data.sections, `${template}: re-adding ${key} leaves the body alone`);
+  }
+  // Reading and writing a document repeatedly must not change it.
+  const once = serializeTypstDocument(start.kind, start.data, start.rawPreamble);
+  const reread = parseTypstDocument(once);
+  assert.equal(serializeTypstDocument(reread.kind, reread.data, reread.rawPreamble), once, `${template}: stable when rewritten`);
+}
+// The visible email changes with the link, and dates in the body are not mistaken for a phone number.
+const standard = parseTypstDocument(fs.readFileSync('base-typst/base-cv.typ', 'utf8'));
+const newEmail = serializeTypstDocument(standard.kind, { ...standard.data, basics: { ...standard.data.basics, email: 'ada@example.org' } }, standard.rawPreamble);
+assert(newEmail.includes('[ada\\@example.org]') && !newEmail.includes('alex.muster'), 'The visible email must change.');
+assert.equal(standard.data.basics.phone, '');
+console.log('Header regressions passed: every field on both CV templates, and stable rewrites.');

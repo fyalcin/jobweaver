@@ -490,7 +490,7 @@ class UXAuditHarness:
             # 2. Jobs Explorer Interactions (filters, timeframe dropdown, card/row inspection)
             # Verify timeframe filter default
             try:
-                timeframe_select = driver.find_elements(By.CSS_SELECTOR, "select.filter-select, select.input-base")
+                timeframe_select = driver.find_elements(By.CSS_SELECTOR, "select.input-base")
                 for sel in timeframe_select:
                     val = sel.get_attribute("value")
                     if val in ("recent", "all"):
@@ -499,7 +499,7 @@ class UXAuditHarness:
                 res1.notes.append(f"Filter inspection warning: {e}")
 
             # Try toggling a filter or clicking a job
-            job_rows = driver.find_elements(By.CSS_SELECTOR, ".job-card, tr.job-row, .table-job-title")
+            job_rows = driver.find_elements(By.CSS_SELECTOR, ".calm-job-row")
             if job_rows:
                 res1.notes.append(f"Found {len(job_rows)} job items on the active view.")
 
@@ -510,10 +510,7 @@ class UXAuditHarness:
             # Find and click first job title or card to open JobDetailPage
             job_link = None
             candidate_selectors = [
-                ".job-card-title-wrap",
-                ".job-card-title",
-                ".td-col-title",
-                ".table-job-title",
+                ".calm-job-title",
             ]
             for sel in candidate_selectors:
                 links = driver.find_elements(By.CSS_SELECTOR, sel)
@@ -532,7 +529,7 @@ class UXAuditHarness:
 
                 # 4. In-Job Tailor Studio
                 # Click the Tailor Studio subtab button
-                tailor_subtab_btns = driver.find_elements(By.CSS_SELECTOR, ".job-subtab-btn")
+                tailor_subtab_btns = driver.find_elements(By.CSS_SELECTOR, ".job-subtabs button")
                 tailor_btn = None
                 for btn in tailor_subtab_btns:
                     if "Tailor Studio" in btn.text:
@@ -581,11 +578,11 @@ class UXAuditHarness:
             if studio_nav_btn:
                 driver.execute_script("arguments[0].click();", studio_nav_btn)
                 time.sleep(1.0)
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".studio-container, .studio-topbar, .studio-welcome")))
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".studio-container, .studio-topbar, .studio-empty-state")))
 
                 # On mobile, test toggling between Editor and Preview if present
                 if profile.is_mobile:
-                    mobile_toggles = driver.find_elements(By.CSS_SELECTOR, ".mobile-toggle-btn")
+                    mobile_toggles = driver.find_elements(By.CSS_SELECTOR, ".studio-mobile-tab-btn")
                     for toggle in mobile_toggles:
                         if "Preview" in toggle.text:
                             driver.execute_script("arguments[0].click();", toggle)

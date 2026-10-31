@@ -133,8 +133,8 @@ export function parseModernerCv(source) {
     if (nameMatch) basics.name = nameMatch[1].trim();
 
     // Subtitle can be subtitle: text(size: 14pt)[...] or subtitle: "..."
-    const subtitleMatch = source.match(/subtitle:\s*(?:text\([^)]*\))?\[([\s\S]*?)\]/) || source.match(/subtitle:\s*"([^"]+)"/);
-    if (subtitleMatch) basics.subtitle = subtitleMatch[1].trim();
+    const subtitleMatch = source.match(/subtitle:\s*(?:text\([^)]*\))?\[((?:\\[\s\S]|[^\]\\])*)\]/) || source.match(/subtitle:\s*"([^"]+)"/);
+    if (subtitleMatch) basics.subtitle = unescapeMarkup(subtitleMatch[1]).trim();
 
     const colorMatch = source.match(/color:\s*rgb\("([^"]+)"\)/);
     if (colorMatch) basics.color = colorMatch[1];
@@ -342,6 +342,69 @@ export function parseModernerCv(source) {
   }
 }
 
+function unescapeMarkup(value) {
+  return value.replace(/\\([#@[\]<>$])/g, '$1');
+}
+
+/**
+ * Finds the optional subtitle between the name and the contact block of a standard-cv header.
+ */
+export function locateStandardSubtitle(source) {
+  const name = source.match(/#text\([^)]*weight:\s*"bold"\)\[[\s\S]*?\]/);
+  const contact = source.match(/#text\(size:\s*9pt,\s*fill:\s*muted-color\)\[/);
+  if (!name || !contact || contact.index < name.index) return { nameEnd: -1, subtitle: null };
+  const nameEnd = name.index + name[0].length;
+  const match = source.slice(nameEnd, contact.index).match(/#text\([^)]*\)\[((?:\\[\s\S]|[^\]\\])*)\]/);
+  if (!match) return { nameEnd, subtitle: null };
+  const start = nameEnd + match.index;
+  const contentEnd = start + match[0].length - 1;
+  return { nameEnd, subtitle: { start, end: contentEnd + 1, contentStart: contentEnd - match[1].length, contentEnd } };
+}
+
+// Index just past the bracket that closes the one at `open`, skipping escapes and nested links.
+function closingBracket(source, open) {
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '\\') i++;
+    else if (source[i] === '[') depth++;
+    else if (source[i] === ']' && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * Finds the contact block of a standard-cv header and the work authorization line below it.
+ */
+export function locateStandardContact(source) {
+  const match = source.match(/#text\(size:\s*9pt,\s*fill:\s*muted-color\)\[/);
+  if (!match) return null;
+  const open = match.index + match[0].length - 1;
+  const end = closingBracket(source, open);
+  if (end < 0) return null;
+  const sectionStart = source.indexOf('#cv-section("', end);
+  const rest = source.slice(end, sectionStart < 0 ? undefined : sectionStart);
+  const line = rest.match(/#text\(size:\s*9pt,\s*weight:\s*"bold"[^)]*\)\[((?:\\[\s\S]|[^\]\\])*)\]/);
+  let residence = null;
+  if (line) {
+    const start = end + line.index;
+    const contentEnd = start + line[0].length - 1;
+    residence = { start, end: contentEnd + 1, contentStart: contentEnd - line[1].length, contentEnd };
+  }
+  return { contentStart: open + 1, contentEnd: end - 1, end, residence };
+}
+
+export const CONTACT_SEPARATOR = /\s*#h\([^)]*\)\s*•\s*#h\([^)]*\)\s*/;
+
+// Names one item of the contact block, so it can be edited without touching the others.
+export function contactItemKey(item, index) {
+  if (/link\("mailto:/.test(item)) return 'email';
+  if (/link\("https?:\/\/(?:www\.)?linkedin\.com\/in\//.test(item)) return 'linkedin';
+  if (/link\("https?:\/\/(?:www\.)?github\.com\//.test(item)) return 'github';
+  if (/^\+?\d[\d\s()/-]{6,}\d$/.test(item)) return 'phone';
+  if (index === 0 && !item.includes('#') && !item.includes('http')) return 'address';
+  return null;
+}
+
 /**
  * Parses standard-cv template (base-cv.typ)
  */
@@ -361,32 +424,31 @@ export function parseStandardCv(source) {
 
     // Name in #align(center)[ ... #text(..., size: 22pt, weight: "bold")[Name] ... ]
     const nameMatch = source.match(/#text\([^)]*weight:\s*"bold"\)\[([\s\S]*?)\]/);
-    if (nameMatch) basics.name = nameMatch[1].trim();
+    if (nameMatch) basics.name = unescapeMarkup(nameMatch[1]).trim();
 
-    // Contact info in block
-    const emailMatch = source.match(/link\("mailto:([^"]+)"\)/);
-    if (emailMatch) basics.email = emailMatch[1].trim();
+    // Contact details: read only the header's contact block, never dates or links further down.
+    const contact = locateStandardContact(source);
+    const items = contact
+      ? source.slice(contact.contentStart, contact.contentEnd).trim().split(CONTACT_SEPARATOR).map(item => item.trim())
+      : [];
+    items.forEach((item, index) => {
+      const key = contactItemKey(item, index);
+      if (key === 'email') basics.email = item.match(/link\("mailto:([^"]+)"\)/)?.[1].trim() || '';
+      if (key === 'linkedin') basics.linkedin = item.match(/linkedin\.com\/in\/([^")]+)"\)/)?.[1].trim() || '';
+      if (key === 'github') basics.github = item.match(/github\.com\/([^")]+)"\)/)?.[1].trim() || '';
+      if (key === 'phone') basics.phone = item;
+      if (key === 'address') basics.address = unescapeMarkup(item);
+    });
 
-    const linkedinMatch = source.match(/link\("https?:\/\/(?:www\.)?linkedin\.com\/in\/([^")]+)"\)/);
-    if (linkedinMatch) basics.linkedin = linkedinMatch[1].trim();
-
-    const githubMatch = source.match(/link\("https?:\/\/(?:www\.)?github\.com\/([^")]+)"\)/);
-    if (githubMatch) basics.github = githubMatch[1].trim();
-
-    const phoneMatch = source.match(/(\+?\d[\d\s-]{7,}\d)/);
-    if (phoneMatch) basics.phone = phoneMatch[1].trim();
-
-    const residenceMatch = source.match(/(\*?Eligible to work in the EU\*?|\*?Daueraufenthalt EU[^\n\]<]*)/);
-    if (residenceMatch) basics.residence = residenceMatch[1].replace(/\*/g, '').trim();
-
-    // Address is usually the first non-linked text item in contact block
-    const contactBlockMatch = source.match(/#text\(size:\s*9pt,\s*fill:\s*muted-color\)\[([\s\S]*?)\]/);
-    if (contactBlockMatch) {
-      const firstLine = contactBlockMatch[1].trim().split('\n')[0].replace(/#h\([^)]*\)/g, '').replace(/•/g, '').trim();
-      if (firstLine && !firstLine.includes('http') && !firstLine.includes('@')) {
-        basics.address = firstLine;
-      }
+    if (contact?.residence) {
+      basics.residence = unescapeMarkup(source.slice(contact.residence.contentStart, contact.residence.contentEnd)).replace(/\*/g, '').trim();
+    } else {
+      const residenceMatch = source.match(/(\*?Eligible to work in the EU\*?|\*?Daueraufenthalt EU[^\n\]<]*)/);
+      if (residenceMatch) basics.residence = residenceMatch[1].replace(/\*/g, '').trim();
     }
+
+    const subtitle = locateStandardSubtitle(source).subtitle;
+    if (subtitle) basics.subtitle = unescapeMarkup(source.slice(subtitle.contentStart, subtitle.contentEnd)).trim();
 
     // Split sections by #cv-section("...")
     const secSplit = source.split(/#cv-section\("([^"]+)"\)/);
@@ -629,7 +691,7 @@ export function parseCoverLetter(source) {
  */
 export function parseTypstDocument(source) {
   if (source?.includes('GIMME_APPROVED')) {
-    return { supported: false, reason: 'Reviewed document: use Advanced mode to preserve its layout and evidence.' };
+    return { supported: false, reason: 'Reviewed document: use Code mode to preserve its layout and evidence.' };
   }
   const kind = detectTemplateKind(source);
   if (kind === 'moderner-cv') {

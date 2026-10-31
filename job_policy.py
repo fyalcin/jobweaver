@@ -136,7 +136,7 @@ def description_incomplete(text):
     return isinstance(text, str) and bool(text.strip()) and not _REQUIREMENTS_MARKER.search(text)
 
 
-# Evidence-based match rating (design: docs/audits/2026-10-24/match-rating.md). The model only
+# Evidence-based match rating. The model only
 # judges single requirements; this fixed rule turns the verified judgements into a label.
 RATINGS = ('Poor', 'Stretch', 'Decent', 'Good', 'Great')
 _COVERAGE = {'shown', 'related', 'missing'}

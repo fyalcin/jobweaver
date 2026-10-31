@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Briefcase, Search, FileText,
   BarChart2, Settings, CalendarDays, MoreHorizontal, User, FileCode2,
@@ -17,17 +17,37 @@ export function AppNav({
   themes = [],
 }) {
   const demo = useDemo();
+  const navRef = useRef(null);
   const tabs = [
     { id: 'jobs', icon: <Briefcase size={20} />, label: 'Jobs', mobilePrimary: true },
     { id: 'daily', icon: <CalendarDays size={20} />, label: 'Daily Matches', mobilePrimary: true },
     { id: 'studio', icon: <FileCode2 size={20} />, label: 'CV Library', mobilePrimary: true },
     { id: 'personalize', icon: <User size={20} />, label: 'Personalize' },
     { id: 'manual', icon: <FileText size={20} />, label: 'Add Job', mobilePrimary: true },
-    { id: 'scraper', icon: <Search size={20} />, label: 'Scraper' },
+    { id: 'scraper', icon: <Search size={20} />, label: 'Sources' },
     { id: 'stats', icon: <BarChart2 size={20} />, label: 'Analytics' },
     { id: 'settings', icon: <Settings size={20} />, label: 'Settings', utility: true },
   ].filter(tab => !demo || !['studio', 'manual', 'scraper'].includes(tab.id));
   const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    const onDown = (e) => {
+      if (navRef.current && !navRef.current.contains(e.target)) {
+        setMoreOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [moreOpen]);
+
   const moreTabs = tabs.filter((tab) => !tab.mobilePrimary);
   const selectTab = (id) => {
     setActiveTab(id);
@@ -38,7 +58,7 @@ export function AppNav({
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <nav className="app-nav">
+    <nav ref={navRef} className="app-nav">
       {/* Brand Header at top of sidebar */}
       <div className="nav-brand">
         <div className="brand-logo-badge">

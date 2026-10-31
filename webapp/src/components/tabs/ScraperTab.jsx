@@ -2,6 +2,7 @@ import React from 'react';
 import { Settings, RefreshCw, Search, AlertCircle, CheckCircle2, ChevronDown, Info } from 'lucide-react';
 import { AiTaskProgress } from '../AiTaskProgress';
 import { formatDateDisplay, formatDateTimeDisplay } from '../../constants/dates';
+import { PageHeader } from '../PageHeader';
 
 export function ScraperTab({
   source, setSource,
@@ -15,9 +16,14 @@ export function ScraperTab({
   activeScrapeTaskId, scrapeAiProgress, scrapeStatus, scrapeLogs, fetchLogs
 }) {
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div className="page-shell">
+      <PageHeader
+        title="Sources"
+        subtitle="Fetch job postings from company feeds, LinkedIn, and Karriere.at connectors."
+      />
+      <div className="page-body-narrow">
       <div className="card" style={{ marginBottom: '2rem' }}>
-        <h2 className="card-title"><Settings size={20} /> Scraper Settings</h2>
+        <h2 className="card-title"><Settings size={20} /> Source Connector</h2>
         <div className="form-group">
           <label className="form-label">Job Source</label>
           <select className="input-base" value={source} onChange={e => setSource(e.target.value)}>
@@ -205,10 +211,11 @@ export function ScraperTab({
               ))}
             </ul>
           )}
-          <button className="btn" style={{ width: '100%', marginTop: '0.5rem', padding: '0.4rem', fontSize: '0.8rem' }} onClick={fetchLogs}>
+          <button className="btn btn-secondary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.4rem', fontSize: '0.8rem' }} onClick={fetchLogs}>
             <RefreshCw size={14} style={{ marginRight: '4px' }} /> Refresh Logs
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

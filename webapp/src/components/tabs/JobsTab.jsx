@@ -1,14 +1,17 @@
 import { useDemo } from '../../demoContext';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, RefreshCw, ChevronDown, MoreHorizontal, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, ChevronDown, MoreHorizontal, X, Plus, HelpCircle, ArrowUpRight } from 'lucide-react';
 import { STATUS_ORDER, STATUS_CONFIG } from '../../constants/status';
 import { RATINGS, RATING_GROUPS, RATING_DEFINITIONS, ratingLabel, ratingSummary, matchesStage, jobStatus, sourceLabel } from '../../constants/ratings';
 import { MatchRating } from '../MatchEvidence';
 import { AiTaskProgress } from '../AiTaskProgress';
 import { germanLevelLabel } from '../../constants/german';
 import { formatDateDisplay } from '../../constants/dates';
+import { StatusSelect } from '../StatusControls';
+import { PageHeader } from '../PageHeader';
 
 const stageOptions = [['new', 'New'], ['interested', 'Shortlisted'], ['pipeline', 'Applied'], ['All', 'All']];
+const STAGE_TAB_VALUES = new Set(['new', 'interested', 'pipeline', 'All']);
 
 export function JobsTab({
   jobs, loading, appliedCount, sortedJobs,
@@ -29,12 +32,14 @@ export function JobsTab({
   const demo = useDemo();
   const [unprocessedExpanded, setUnprocessedExpanded] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [rubricOpen, setRubricOpen] = useState(false);
   const [openActions, setOpenActions] = useState(null);
   const actionsRef = useRef(null);
   const triggerRef = useRef(null);
   const [expandedGroups, setExpandedGroups] = useState({ Poor: false, Blocked: false });
   const failedAnalysisJobs = unprocessedJobs.filter(job => job.analysis_state === 'failed');
   const shortError = text => String(text || '').length > 160 ? `${String(text).slice(0, 157)}…` : String(text || '');
+
   useEffect(() => {
     if (openActions == null) return;
     const outside = event => {
@@ -47,11 +52,29 @@ export function JobsTab({
     document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [openActions]);
+
   const closeAnd = action => { setOpenActions(null); triggerRef.current?.focus(); action(); };
   const menuAction = (label, action, disabled = false) => <button type="button" disabled={disabled} onClick={() => closeAnd(action)}>{label}</button>;
-  return <div className="calm-jobs">
-    <div className="calm-jobs-heading"><h2>Jobs</h2><button className="btn btn-primary" disabled={demo} onClick={onAddPosting}>Add posting</button></div>
-    <p className="jobs-stats-summary-row">{jobs.length.toLocaleString()} jobs · {appliedCount} in the application pipeline · {sortedJobs.length} visible{filteredOutCount > 0 && ` · ${filteredOutCount} hidden by filters`}</p>
+
+  // Hide redundant stage chip when it is already shown by the primary stage segmented bar
+  const visibleFilterChips = activeFilters.filter(
+    filter => !(filter.key === 'status' && STAGE_TAB_VALUES.has(statusFilter))
+  );
+
+  return (
+    <div className="calm-jobs page-shell">
+      <PageHeader
+        title="Jobs"
+        badge={`${sortedJobs.length} visible`}
+        subtitle={`${jobs.length.toLocaleString()} tracked · ${appliedCount} in application pipeline${filteredOutCount > 0 ? ` · ${filteredOutCount} hidden by filters` : ''}`}
+        actions={
+          <button type="button" className="btn btn-primary" disabled={demo} onClick={onAddPosting}>
+            <Plus size={15} />
+            <span>Add posting</span>
+          </button>
+        }
+      />
+
       {/* Processing Queue Banner */}
       {unprocessedJobs.length > 0 && (
         <div style={{
@@ -100,7 +123,7 @@ export function JobsTab({
                 </ul>
               )}
               {reprocessTaskId && reprocessProgress && reprocessProgress.total > 0 && (
-                  <AiTaskProgress
+                <AiTaskProgress
                   label="Job analysis (persists if you reload)"
                   processed={reprocessProgress.processed} total={reprocessProgress.total}
                   failed={reprocessProgress.failed} accent="#f59e0b"
@@ -150,85 +173,297 @@ export function JobsTab({
         </div>
       )}
 
+      <div className="calm-jobs-toolbar">
+        <div className="jobs-stage-tabs" role="group" aria-label="Job stage">
+          {stageOptions.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={statusFilter === value ? 'active' : ''}
+              aria-pressed={statusFilter === value}
+              onClick={() => setStatusFilter(value)}
+            >
+              {label} <span>{jobs.filter(job => matchesStage(job, value)).length}</span>
+            </button>
+          ))}
+        </div>
+        <div className="calm-jobs-search">
+          <input
+            className="input-base"
+            aria-label="Search jobs"
+            placeholder="Search title, company or skill"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          <button
+            type="button"
+            className={`btn btn-secondary ${filtersOpen ? 'is-active' : ''}`}
+            aria-label="Filter"
+            aria-expanded={filtersOpen}
+            aria-controls="jobs-filter-panel"
+            onClick={() => setFiltersOpen(value => !value)}
+          >
+            <span>Filter</span>
+            {visibleFilterChips.length > 0 && (
+              <span className="filter-count-dot" aria-hidden="true">{visibleFilterChips.length}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`btn-icon rubric-toggle-btn ${rubricOpen ? 'is-active' : ''}`}
+            aria-expanded={rubricOpen}
+            aria-label="Rating rubric guide"
+            title="Show rating rubric definitions"
+            onClick={() => setRubricOpen(v => !v)}
+          >
+            <HelpCircle size={15} />
+          </button>
+        </div>
+      </div>
 
-    <div className="calm-jobs-toolbar">
-      <div className="jobs-stage-tabs" role="group" aria-label="Job stage">
-        {stageOptions.map(([value, label]) => <button key={value} className={statusFilter === value ? 'active' : ''} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)}>{label} <span>{jobs.filter(job => matchesStage(job, value)).length}</span></button>)}
-      </div>
-      <div className="calm-jobs-search"><input className="input-base" aria-label="Search jobs" placeholder="Search title, company or skill" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-        <button className="btn btn-secondary" aria-expanded={filtersOpen} aria-controls="jobs-filter-panel" onClick={() => setFiltersOpen(value => !value)}>Filter</button>
-      </div>
-    </div>
-    {filtersOpen && <section id="jobs-filter-panel" className="calm-filter-panel" aria-label="Job filters">
-      <label>German level<select aria-label="German level" className="input-base" value={germanFilter} onChange={e => setGermanFilter(e.target.value)}>{['All', 'none', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'unknown'].map(level => <option key={level} value={level}>{level === 'All' ? 'Any level' : level === 'B1' ? 'B1 or below' : germanLevelLabel(level)}</option>)}</select></label>
-      <label>Status<select aria-label="Status" className="input-base" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="All">Any status</option><option value="pipeline">Applied pipeline</option>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
-      <label>Source<select aria-label="Source" className="input-base" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}><option value="All">Any source</option>{uniqueSources.map(source => <option key={source} value={source}>{sourceLabel(source)}</option>)}</select></label>
-      <label>Found<select aria-label="Found" className="input-base" value={scrapeDateFilter} onChange={e => setScrapeDateFilter(e.target.value)}>{[['__all', 'Any date'], ['__today', 'Today'], ['__last7', 'Last 7 days (keeps pipeline)'], ['__recent21', 'Last 21 days (keeps pipeline)'], ['__last30', 'Last 30 days (keeps pipeline)']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}{uniqueScrapeDates.map(date => <option key={date} value={date}>{formatDateDisplay(date)}</option>)}</select></label>
-      <label>Minimum rating<select aria-label="Minimum rating" className="input-base" value={minimumRating} onChange={e => setMinimumRating(e.target.value)}><option value="">Any rating, including unrated</option>{RATINGS.slice(0, -1).map(rating => <option key={rating} value={rating}>{rating} or better</option>)}</select></label>
-      <label>Sort within rating<select aria-label="Sort within rating" className="input-base" value={`${sortConfig.key}:${sortConfig.direction}`} onChange={e => { const [key, direction] = e.target.value.split(':'); setSortConfig({ key, direction }); }}><option value="match_rating:desc">Best fit first</option><option value="date_scraped:desc">Newest first</option><option value="salary_yearly:desc">Highest salary first</option><option value="title:asc">Title A–Z</option><option value="company:asc">Company A–Z</option></select></label>
-      <details className="calm-saved-views"><summary>Saved views</summary><button className="btn btn-secondary" onClick={() => { const name = window.prompt('Name this view'); if (name) saveCurrentView(name); }}>Save current view</button>{savedViews.map(view => <div key={view.name}><button onClick={() => applyView(view)}>{view.name}</button><button aria-label={`Delete saved view ${view.name}`} onClick={() => deleteSavedView(view.name)}><X size={14} /></button></div>)}</details>
-      <button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
-    </section>}
-    <div className="calm-filter-labels">{activeFilters.map(filter => <button className="calm-filter-label" key={filter.key} onClick={() => clearFilter(filter.key)} aria-label={`Remove ${filter.label}`}>{filter.label} <X size={12} /></button>)}</div>
-    {selectedCount > 0 && <div className="calm-batch-bar" aria-label="Selected jobs">
-      <span>{selectedCount} selected</span>
-      <button className="btn btn-secondary" onClick={() => setVisibleSelection(selectedJobs, false)}>Clear selection</button>
-      <button className="btn btn-secondary" onClick={() => setVisibleSelection(paginatedJobs, true)}>Select this page</button>
-      <label>Mark as <select className="input-base" value={batchMarkStatus} onChange={e => setBatchMarkStatus(e.target.value)}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
-      <button className="btn btn-secondary" disabled={demo || batchMarkActive} onClick={() => handleBatchMark(selectedJobs)}>Mark selected</button>
-      <button className="btn btn-primary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerate(selectedJobs)}>Generate documents</button>
-      <button className="btn btn-secondary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerateForce(selectedJobs)}>Regenerate documents</button>
-    </div>}
-    {(batchGenTaskId || batchGenSubmitting) && <div className="calm-operation-status" role="status"><span>Document generation {batchGenProgress?.stage === 'cancelling' ? 'stopping after running calls finish' : batchGenProgress?.status || 'starting'} · {batchGenProgress?.processed || 0} / {batchGenProgress?.total || 0} · {batchGenProgress?.failed || 0} failed</span><button className="btn btn-secondary" disabled={demo || !batchGenTaskId} onClick={handleBatchGenerateCancel}>Cancel generation</button></div>}
-    {reprocessTaskId && !unprocessedJobs.length && <p role="status">Rating {reprocessProgress?.status || 'in progress'} · {reprocessProgress?.processed || 0} / {reprocessProgress?.total || 0}</p>}
-    {loading ? <p role="status">Loading jobs…</p> : !jobs.length ? <p>No jobs tracked yet. Add a posting to get started.</p> : !sortedJobs.length ? <div className="jobs-empty-filtered"><h3>No jobs match these filters</h3><button className="btn btn-secondary" onClick={clearFilters}>Clear filters</button></div> : <>
-      <div className="jobs-rating-groups">
-        {RATING_GROUPS.map(group => {
-          const groupJobs = paginatedJobs.filter(job => ratingLabel(job) === group);
-          if (!groupJobs.length) return null;
-          const collapsible = group === 'Poor' || group === 'Blocked';
-          const open = !collapsible || expandedGroups[group];
-          return <section key={group} className={`jobs-rating-group ${collapsible ? 'quiet-group' : ''}`} aria-label={`${group} jobs`}>
-            <div className="rating-group-heading"><h3>{collapsible ? <button aria-expanded={open} onClick={() => setExpandedGroups(prev => ({ ...prev, [group]: !open }))}><ChevronDown size={16} style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />{group} <span>{groupJobs.length}</span></button> : <>{group} <span>{groupJobs.length}</span></>}</h3><p>{RATING_DEFINITIONS[group]}{['Great', 'Good', 'Decent', 'Stretch'].includes(group) && ' Soft preference conflicts can lower the result.'}</p></div>
-            {open && groupJobs.map(job => {
-              const openJob = () => setSelectedJobDetails(job);
-              const busyCV = generatingJobsDocs.has(`${job.id}-cv`), busyLetter = generatingJobsDocs.has(`${job.id}-letter`);
-              const docs = job.cv_url && job.letter_url ? 'CV and letter ready' : job.cv_url ? 'CV ready' : job.letter_url ? 'Letter ready' : 'No documents yet';
-              const actionsOpen = openActions === job.id;
-              return <article key={job.id} className={`calm-job-row ${selectedJobIds.has(job.id) ? 'selected' : ''}`} tabIndex={0} role="link" aria-label={`Open ${job.title} at ${job.company}`} onClick={openJob} onKeyDown={event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openJob(); } }}>
-                <input type="checkbox" aria-label={`Select ${job.title}`} checked={selectedJobIds.has(job.id)} onClick={e => e.stopPropagation()} onChange={() => toggleSelectedJob(job.id)} />
-                <div className="calm-job-main"><div className="calm-job-title">{job.title}</div><div className="calm-job-meta"><span className="calm-job-company">{job.company}</span>{job.location && ` · ${job.location}`}{job.work_model && ` · ${job.work_model}`}</div>
-                  <div className="calm-job-facts">German: {germanLevelLabel(job.german_level ?? job.requires_german)} · {job.salary_yearly ? `€${Number(job.salary_yearly).toLocaleString('de-AT')} a year` : job.salary && job.salary !== 'Not Specified' ? job.salary : 'Salary not stated'} · {sourceLabel(job.source)}</div>
-                  <p className="calm-job-evidence">{ratingSummary(job)}</p>
-                </div>
-                <div className="calm-job-rating"><MatchRating job={job} /></div>
-                <div className="calm-job-state"><span>{STATUS_CONFIG[jobStatus(job)]?.label || jobStatus(job)}</span><div>{formatDateDisplay(job.date_scraped, 'Date unknown')}</div><span className={job.cv_url || job.letter_url ? 'docs-ready' : ''}>{busyCV || busyLetter ? 'Generating documents…' : docs}</span></div>
-                <div className="calm-job-actions" onClick={e => e.stopPropagation()}>
-                  <button type="button" className="btn btn-icon" aria-label={`Actions for ${job.title}`} aria-expanded={actionsOpen} aria-controls={`job-actions-${job.id}`} onClick={e => { triggerRef.current = e.currentTarget; setOpenActions(actionsOpen ? null : job.id); }}><MoreHorizontal size={19} /></button>
-                  {actionsOpen && <div id={`job-actions-${job.id}`} ref={actionsRef} className="calm-row-menu" role="group" aria-label={`Actions for ${job.title}`}>
-                    {menuAction('Open job', openJob)}
-                    {job.job_url && <a href={job.job_url} target="_blank" rel="noreferrer">Open original posting</a>}
-                    {job.cv_url && <a href={job.cv_url} target="_blank" rel="noreferrer">Download CV</a>}
-                    {job.letter_url && <a href={job.letter_url} target="_blank" rel="noreferrer">Download letter</a>}
-                    <label>Change status<select className="input-base" aria-label={`Status for ${job.title}`} disabled={demo} value={jobStatus(job)} onChange={e => closeAnd(() => updateJobStatus(job.id, e.target.value))}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
-                    {menuAction('Tailor documents', () => setSelectedJobDetails({ ...job, initialTab: 'studio' }))}
-                    {menuAction('Generate CV', () => handleJobsGenerateCV(job), demo || busyCV)}
-                    {menuAction('Generate letter', () => handleJobsGenerateLetter(job), demo || busyLetter)}
-                    {menuAction('Generate CV and letter', () => handleJobsGenerateBoth(job), demo || busyCV || busyLetter)}
-                    {menuAction(['Needs re-rating', 'Unrated'].includes(group) ? 'Re-rate' : 'Rate again', () => handleStartReprocess(job.id), demo || !!reprocessTaskId)}
-                    {menuAction('Edit job', () => { setEditingJob(job); setEditTitle(job.title || ''); setEditCompany(job.company || ''); }, demo)}
-                    {menuAction('Delete job', () => handleDeleteJob(job), demo)}
-                  </div>}
-                </div>
-              </article>;
+      {rubricOpen && (
+        <section className="jobs-rubric-card" aria-label="Match rating rubric">
+          <div className="jobs-rubric-header">
+            <strong>Match Rating Rubric</strong>
+            <span>Soft preference conflicts can lower Great–Stretch by one tier.</span>
+            <button type="button" className="btn-icon" aria-label="Close rubric" onClick={() => setRubricOpen(false)}>
+              <X size={14} />
+            </button>
+          </div>
+          <div className="jobs-rubric-grid">
+            {RATING_GROUPS.filter(g => RATING_DEFINITIONS[g]).map(group => (
+              <div key={group} className="jobs-rubric-item">
+                <span className="jobs-rubric-tier">{group}</span>
+                <span className="jobs-rubric-desc">{RATING_DEFINITIONS[group]}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {filtersOpen && (
+        <section id="jobs-filter-panel" className="calm-filter-panel" aria-label="Job filters">
+          <label>German level<select aria-label="German level" className="input-base" value={germanFilter} onChange={e => setGermanFilter(e.target.value)}>{['All', 'none', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'unknown'].map(level => <option key={level} value={level}>{level === 'All' ? 'Any level' : level === 'B1' ? 'B1 or below' : germanLevelLabel(level)}</option>)}</select></label>
+          <label>Stage<select aria-label="Status" className="input-base" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="All">Any stage</option><option value="pipeline">Applied pipeline</option>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+          <label>Source<select aria-label="Source" className="input-base" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}><option value="All">Any source</option>{uniqueSources.map(source => <option key={source} value={source}>{sourceLabel(source)}</option>)}</select></label>
+          <label>Found<select aria-label="Found" className="input-base" value={scrapeDateFilter} onChange={e => setScrapeDateFilter(e.target.value)}>{[['__all', 'Any date'], ['__today', 'Today'], ['__last7', 'Last 7 days (keeps pipeline)'], ['__recent21', 'Last 21 days (keeps pipeline)'], ['__last30', 'Last 30 days (keeps pipeline)']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}{uniqueScrapeDates.map(date => <option key={date} value={date}>{formatDateDisplay(date)}</option>)}</select></label>
+          <label>Minimum rating<select aria-label="Minimum rating" className="input-base" value={minimumRating} onChange={e => setMinimumRating(e.target.value)}><option value="">Any rating, including unrated</option>{RATINGS.slice(0, -1).map(rating => <option key={rating} value={rating}>{rating} or better</option>)}</select></label>
+          <label>Sort within rating<select aria-label="Sort within rating" className="input-base" value={`${sortConfig.key}:${sortConfig.direction}`} onChange={e => { const [key, direction] = e.target.value.split(':'); setSortConfig({ key, direction }); }}><option value="match_rating:desc">Best fit first</option><option value="date_scraped:desc">Newest first</option><option value="salary_yearly:desc">Highest salary first</option><option value="title:asc">Title A–Z</option><option value="company:asc">Company A–Z</option></select></label>
+          <details className="calm-saved-views">
+            <summary>Saved views</summary>
+            <button type="button" className="btn btn-secondary" onClick={() => { const name = window.prompt('Name this view'); if (name) saveCurrentView(name); }}>Save current view</button>
+            {savedViews.map(view => (
+              <div key={view.name}>
+                <button type="button" onClick={() => applyView(view)}>{view.name}</button>
+                <button type="button" aria-label={`Delete saved view ${view.name}`} onClick={() => deleteSavedView(view.name)}><X size={14} /></button>
+              </div>
+            ))}
+          </details>
+          <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
+        </section>
+      )}
+
+      {visibleFilterChips.length > 0 && (
+        <div className="calm-filter-labels">
+          {visibleFilterChips.map(filter => {
+            const displayLabel = filter.label.replace(/^Status:/, 'Stage:');
+            return (
+              <button
+                type="button"
+                className="calm-filter-label"
+                key={filter.key}
+                onClick={() => clearFilter(filter.key)}
+                aria-label={`Remove ${filter.label}`}
+              >
+                {displayLabel} <X size={12} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedCount > 0 && (
+        <div className="calm-batch-bar" aria-label="Selected jobs">
+          <span>{selectedCount} selected</span>
+          <button type="button" className="btn btn-secondary" onClick={() => setVisibleSelection(selectedJobs, false)}>Clear selection</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setVisibleSelection(paginatedJobs, true)}>Select this page</button>
+          <label>Mark as <select className="input-base" value={batchMarkStatus} onChange={e => setBatchMarkStatus(e.target.value)}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+          <button type="button" className="btn btn-secondary" disabled={demo || batchMarkActive} onClick={() => handleBatchMark(selectedJobs)}>Mark selected</button>
+          <button type="button" className="btn btn-primary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerate(selectedJobs)}>Generate documents</button>
+          <button type="button" className="btn btn-secondary" disabled={demo || !!batchGenTaskId || batchGenSubmitting} onClick={() => handleBatchGenerateForce(selectedJobs)}>Regenerate documents</button>
+        </div>
+      )}
+
+      {(batchGenTaskId || batchGenSubmitting) && (
+        <div className="calm-operation-status" role="status">
+          <span>Document generation {batchGenProgress?.stage === 'cancelling' ? 'stopping after running calls finish' : batchGenProgress?.status || 'starting'} · {batchGenProgress?.processed || 0} / {batchGenProgress?.total || 0} · {batchGenProgress?.failed || 0} failed</span>
+          <button type="button" className="btn btn-secondary" disabled={demo || !batchGenTaskId} onClick={handleBatchGenerateCancel}>Cancel generation</button>
+        </div>
+      )}
+
+      {reprocessTaskId && !unprocessedJobs.length && (
+        <p role="status">Rating {reprocessProgress?.status || 'in progress'} · {reprocessProgress?.processed || 0} / {reprocessProgress?.total || 0}</p>
+      )}
+
+      {loading ? (
+        <p role="status">Loading jobs…</p>
+      ) : !jobs.length ? (
+        <p>No jobs tracked yet. Add a posting to get started.</p>
+      ) : !sortedJobs.length ? (
+        <div className="jobs-empty-filtered">
+          <h3>No jobs match these filters</h3>
+          <button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>
+        </div>
+      ) : (
+        <>
+          <div className="jobs-rating-groups">
+            {RATING_GROUPS.map(group => {
+              const groupJobs = paginatedJobs.filter(job => ratingLabel(job) === group);
+              if (!groupJobs.length) return null;
+              const collapsible = group === 'Poor' || group === 'Blocked';
+              const open = !collapsible || expandedGroups[group];
+              return (
+                <section key={group} className={`jobs-rating-group ${collapsible ? 'quiet-group' : ''}`} aria-label={`${group} jobs`}>
+                  <div className="rating-group-heading">
+                    <h3>
+                      {collapsible ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setExpandedGroups(prev => ({ ...prev, [group]: !open }))}
+                        >
+                          <ChevronDown size={15} style={{ transform: open ? 'none' : 'rotate(-90deg)' }} />
+                          {group} <span>{groupJobs.length}</span>
+                        </button>
+                      ) : (
+                        <>{group} <span>{groupJobs.length}</span></>
+                      )}
+                    </h3>
+                  </div>
+
+                  {open && groupJobs.map(job => {
+                    const openJob = () => setSelectedJobDetails(job);
+                    const busyCV = generatingJobsDocs.has(`${job.id}-cv`);
+                    const busyLetter = generatingJobsDocs.has(`${job.id}-letter`);
+                    const hasDocs = Boolean(job.cv_url || job.letter_url);
+                    const docsLabel = job.cv_url && job.letter_url ? 'Tailor CV & Letter' : job.cv_url ? 'Tailor CV' : job.letter_url ? 'Tailor Letter' : 'No documents yet';
+                    const actionsOpen = openActions === job.id;
+                    return (
+                      <div
+                        key={job.id}
+                        className={`calm-job-row ${selectedJobIds.has(job.id) ? 'selected' : ''}`}
+                        tabIndex={0}
+                        role="link"
+                        aria-label={`Open ${job.title} at ${job.company}`}
+                        onClick={openJob}
+                        onKeyDown={event => {
+                          if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
+                            event.preventDefault();
+                            openJob();
+                          }
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="calm-job-checkbox"
+                          aria-label={`Select ${job.title}`}
+                          checked={selectedJobIds.has(job.id)}
+                          onClick={e => e.stopPropagation()}
+                          onChange={() => toggleSelectedJob(job.id)}
+                        />
+                        <div className="calm-job-main">
+                          <div className="calm-job-title-line">
+                            <span className="calm-job-title">{job.title}</span>
+                            <span className="calm-job-meta">
+                              <span className="calm-job-company">{job.company}</span>
+                              {job.location && ` · ${job.location}`}
+                              {job.work_model && ` · ${job.work_model}`}
+                            </span>
+                          </div>
+                          <div className="calm-job-facts">
+                            German: {germanLevelLabel(job.german_level ?? job.requires_german)} · {job.salary_yearly ? `€${Number(job.salary_yearly).toLocaleString('de-AT')} / yr` : job.salary && job.salary !== 'Not Specified' ? job.salary : 'Salary not stated'} · {sourceLabel(job.source)}
+                          </div>
+                          <p className="calm-job-evidence">{ratingSummary(job)}</p>
+                        </div>
+                        <div className="calm-job-rating">
+                          <MatchRating job={job} />
+                        </div>
+                        <div className="calm-job-state" onClick={e => e.stopPropagation()}>
+                          <StatusSelect
+                            compact
+                            ariaLabel={`Stage for ${job.title}`}
+                            value={jobStatus(job)}
+                            onChange={val => updateJobStatus(job.id, val)}
+                          />
+                          <div className="calm-job-date">{formatDateDisplay(job.date_scraped, 'Date unknown')}</div>
+                          {busyCV || busyLetter ? (
+                            <span className="docs-generating">Generating…</span>
+                          ) : hasDocs ? (
+                            <button
+                              type="button"
+                              className="docs-ready-link"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedJobDetails({ ...job, initialTab: 'studio' });
+                              }}
+                            >
+                              <span>{docsLabel}</span>
+                              <ArrowUpRight size={11} />
+                            </button>
+                          ) : (
+                            <span className="docs-empty">{docsLabel}</span>
+                          )}
+                        </div>
+                        <div className="calm-job-actions" onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            aria-label={`Actions for ${job.title}`}
+                            aria-expanded={actionsOpen}
+                            aria-controls={`job-actions-${job.id}`}
+                            onClick={e => {
+                              triggerRef.current = e.currentTarget;
+                              setOpenActions(actionsOpen ? null : job.id);
+                            }}
+                          >
+                            <MoreHorizontal size={18} />
+                          </button>
+                          {actionsOpen && (
+                            <div id={`job-actions-${job.id}`} ref={actionsRef} className="calm-row-menu" role="group" aria-label={`Actions for ${job.title}`}>
+                              {menuAction('Open job', openJob)}
+                              {job.job_url && <a href={job.job_url} target="_blank" rel="noreferrer">Open original posting</a>}
+                              {job.cv_url && <a href={job.cv_url} target="_blank" rel="noreferrer">Download CV</a>}
+                              {job.letter_url && <a href={job.letter_url} target="_blank" rel="noreferrer">Download letter</a>}
+                              <label>Change status<select className="input-base" aria-label={`Status for ${job.title}`} disabled={demo} value={jobStatus(job)} onChange={e => closeAnd(() => updateJobStatus(job.id, e.target.value))}>{STATUS_ORDER.map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label}</option>)}</select></label>
+                              {menuAction('Tailor documents', () => setSelectedJobDetails({ ...job, initialTab: 'studio' }))}
+                              {menuAction('Generate CV', () => handleJobsGenerateCV(job), demo || busyCV)}
+                              {menuAction('Generate letter', () => handleJobsGenerateLetter(job), demo || busyLetter)}
+                              {menuAction('Generate CV and letter', () => handleJobsGenerateBoth(job), demo || busyCV || busyLetter)}
+                              {menuAction(['Needs re-rating', 'Unrated'].includes(group) ? 'Re-rate' : 'Rate again', () => handleStartReprocess(job.id), demo || !!reprocessTaskId)}
+                              {menuAction('Edit job', () => { setEditingJob(job); setEditTitle(job.title || ''); setEditCompany(job.company || ''); }, demo)}
+                              {menuAction('Delete job', () => handleDeleteJob(job), demo)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              );
             })}
-          </section>;
-        })}
-      </div>
-      <div className="jobs-pagination-bar"><span>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, sortedJobs.length)}–{Math.min(currentPage * itemsPerPage, sortedJobs.length)} of {sortedJobs.length} jobs</span><div>
-        <select aria-label="Jobs per page" className="input-base" value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}>{[10, 25, 50, 100].map(size => <option key={size} value={size}>{size} per page</option>)}</select>
-        <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage(page => page - 1)}>Previous</button><span>Page {currentPage} of {totalPages}</span><button className="btn btn-secondary" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(page => page + 1)}>Next</button>
-      </div></div>
-    </>}
-  </div>;
+          </div>
+
+          <div className="jobs-pagination-bar">
+            <span>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, sortedJobs.length)}–{Math.min(currentPage * itemsPerPage, sortedJobs.length)} of {sortedJobs.length} jobs</span>
+            <div>
+              <select aria-label="Jobs per page" className="input-base" value={itemsPerPage} onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}>{[10, 25, 50, 100].map(size => <option key={size} value={size}>{size} per page</option>)}</select>
+              <button type="button" className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage(page => page - 1)}>Previous</button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <button type="button" className="btn btn-secondary" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(page => page + 1)}>Next</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

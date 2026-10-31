@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { User, RefreshCw, Save, RotateCcw, FileText, AlertTriangle, MessageSquareText, Lock } from 'lucide-react';
+import { PageHeader } from '../PageHeader';
 
 function formatAssetPath(path) {
-  return path ? String(path).replace(/^(?:\.\.\/)+tmp\/[^/]+\//, '') : path;
+  if (!path) return path;
+  return String(path)
+    .replace(/^(?:\.\.\/)+(?:tmp|run\/user\/\d+)\/[^/]+\//, '')
+    .replace(/^.*\/profiles\/[^/]+\//, '');
 }
 
 function NotesEditor({ notes, savingNotes, saveNotes }) {
@@ -259,7 +263,12 @@ export function PersonalizeTab({
   }, [cvLoaded, loadingCv, fetchCv, notesLoaded, loadingNotes, fetchNotes]);
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div className="page-shell">
+      <PageHeader
+        title="Personalize"
+        subtitle="Manage your career record, recent experience & standing notes, and extra drafting preferences."
+      />
+      <div className="page-body-narrow">
       <div className="card">
         <h2 className="card-title"><User size={20} /> Personal CV (Plain Text)</h2>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
@@ -319,6 +328,7 @@ export function PersonalizeTab({
             onSave={(instructions) => saveConfig({ document_instructions: instructions })}
           />
         )}
+      </div>
       </div>
     </div>
   );

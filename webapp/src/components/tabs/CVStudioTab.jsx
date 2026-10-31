@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play, Save, Download, Trash2, Plus, Sparkles, RefreshCw,
-  AlertTriangle, Check, FileText, ChevronDown, ChevronsUpDown, ChevronsDownUp, ZoomIn, ZoomOut, Maximize2,
-  FileCode2, Copy, X, Code, Eye, SlidersHorizontal, Pencil
+  AlertTriangle, FileText,
+  FileCode2, X, Code, Eye, Pencil
 } from 'lucide-react';
+import { PageHeader } from '../PageHeader';
+import { StudioJumpBar, FloatingPreviewHud } from '../studio/StudioChrome';
+import { allSectionsOpen } from '../studio/studioSections';
 import { TypstWasmPreview } from '../studio/TypstWasmPreview';
 import { TypstSimpleEditor } from '../studio/TypstSimpleEditor';
 import { StudioCodeEditor } from '../studio/StudioCodeEditor';
@@ -53,35 +56,18 @@ export function CVStudioTab({
   const textareaRef = useRef(null);
   const isLocalChangeRef = useRef(false);
 
-  // Simple-mode accordion state lives here so the expand/collapse toggle can sit in the mode header
+  const openedDocKeyRef = useRef(null);
+  const [mobileChipsOpen, setMobileChipsOpen] = useState(false);
+
+  // Simple-mode accordion state lives here so the Jump bar and the editor share it
   const [simpleOpenSections, setSimpleOpenSections] = useState({ basics: true });
 
-  useEffect(() => {
-    // Reset the accordion when the selected document changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSimpleOpenSections({ basics: true });
-  }, [activeDocId]);
-
-  const simpleSectionKeys = useMemo(() => {
-    if (!parsedTypst?.supported) return [];
-    if (parsedTypst.kind === 'cover-letter') return ['recipient', 'paragraphs'];
-    return (parsedTypst.data?.sections || []).map((sec, idx) => `sec-${idx}-${sec.title}`);
-  }, [parsedTypst]);
-
-  const allSimpleExpanded =
-    simpleSectionKeys.length > 0 &&
-    !!simpleOpenSections.basics &&
-    simpleSectionKeys.every((k) => simpleOpenSections[k]);
-
-  const toggleSimpleAll = () => {
-    if (allSimpleExpanded) {
-      setSimpleOpenSections({});
-    } else {
-      const all = { basics: true };
-      simpleSectionKeys.forEach((k) => { all[k] = true; });
-      setSimpleOpenSections(all);
-    }
-  };
+  // Every section starts open when a document first loads; later folds are left alone.
+  const openSectionsOnce = useCallback((key, res) => {
+    if (openedDocKeyRef.current === key) return;
+    openedDocKeyRef.current = key;
+    setSimpleOpenSections(allSectionsOpen(res.data, res.kind));
+  }, []);
 
   // Safety fallback: if documents exist but no document is active and not loading, auto-select first document
   useEffect(() => {
@@ -113,15 +99,16 @@ export function CVStudioTab({
       if (res.supported) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setParsedTypst(res);
+        openSectionsOnce(`${activeDoc.id}:${res.kind}`, res);
       } else {
 
         setParsedTypst(null);
-        // Graceful non-destructive fallback to Advanced mode if custom scripting is detected
+        // Graceful non-destructive fallback to Code mode if custom scripting is detected
         if (editorMode === 'simple') {
 
           setEditorMode('advanced');
           if (addToast) {
-            addToast(res.reason || 'Custom Typst layout detected. Viewing in Advanced code mode.', 'info');
+            addToast(res.reason || 'Custom Typst layout detected. Viewing in Code mode.', 'info');
           }
         }
       }
@@ -131,7 +118,7 @@ export function CVStudioTab({
 
       setEditorMode('advanced');
     }
-  }, [activeDoc?.id, activeDoc?.engine, draftContent, editorMode, addToast]);
+  }, [activeDoc?.id, activeDoc?.engine, draftContent, editorMode, addToast, openSectionsOnce]);
 
   const handleSwitchMode = (mode) => {
     if (mode === 'simple') {
@@ -142,10 +129,11 @@ export function CVStudioTab({
       const res = parseTypstDocument(draftContent);
       if (res.supported) {
         setParsedTypst(res);
+        openSectionsOnce(`${activeDoc.id}:${res.kind}`, res);
         setEditorMode('simple');
       } else {
         if (addToast) {
-          addToast(res.reason || 'Document uses custom Typst code. Editing in Advanced code mode.', 'warning');
+          addToast(res.reason || 'Document uses custom Typst code. Editing in Code mode.', 'warning');
         }
       }
     } else {
@@ -162,12 +150,10 @@ export function CVStudioTab({
       isLocalChangeRef.current = true;
       setDraftContent(newSource);
     } catch (err) {
-      addToast(err.message || 'This change needs Advanced mode.', 'warning');
+      addToast(err.message || 'This change needs Code mode.', 'warning');
       setEditorMode('advanced');
     }
   };
-
-  const lineCount = draftContent.split('\n').length;
 
   // Close modal on Escape key
   useEffect(() => {
@@ -254,7 +240,18 @@ export function CVStudioTab({
   };
 
   return (
-    <div className="studio-container">
+    <div className="page-shell">
+      <PageHeader
+        title="CV Library"
+        badge={documents.length > 0 ? `${documents.length} saved` : undefined}
+        subtitle="Create, edit, and export standalone Typst & LaTeX CVs with live preview."
+        actions={
+          <button type="button" className="btn btn-primary" onClick={handleOpenNewModal}>
+            <Plus size={16} /> <span>New CV</span>
+          </button>
+        }
+      />
+      <div className="studio-container cv-studio-container">
       {/* Top Action & Navigation Bar */}
       <div className={`studio-topbar${activeDoc?.engine === 'typst' ? ' engine-typst' : ''}${autosaveError ? ' autosave-error' : ''}`}>
         {/* Row 1: Document Selector, New button, and Delete on mobile / Title on desktop */}
@@ -318,13 +315,41 @@ export function CVStudioTab({
                   <span style={{ fontSize: '0.78rem' }}>Rename</span>
                 </button>
               )}
-              {activeDoc.engine && (
+              {activeDoc.engine && activeDoc.engine !== 'typst' && (
                 <EngineBadge engine={activeDoc.engine} />
               )}
               {isDirty && (
                 <span className="studio-dirty-badge" title={saving ? 'Saving…' : 'Unsaved changes'}>
                   <AlertTriangle size={12} /> <span className="dirty-badge-text">{saving ? 'Saving…' : 'Unsaved'}</span>
                 </span>
+              )}
+            </div>
+          )}
+          {activeDoc && (
+            <div className="studio-inline-mode-group">
+              {activeDoc.engine === 'typst' ? (
+                <div className="studio-inline-mode-toggle" role="group" aria-label="Editor mode">
+                  <button
+                    type="button"
+                    className={`studio-inline-mode-btn ${editorMode === 'simple' ? 'active' : ''}`}
+                    aria-pressed={editorMode === 'simple'}
+                    onClick={() => handleSwitchMode('simple')}
+                    title="Structured visual form editor"
+                  >
+                    Simple
+                  </button>
+                  <button
+                    type="button"
+                    className={`studio-inline-mode-btn ${editorMode === 'advanced' ? 'active' : ''}`}
+                    aria-pressed={editorMode === 'advanced'}
+                    onClick={() => handleSwitchMode('advanced')}
+                    title="Typst source code editor"
+                  >
+                    Code
+                  </button>
+                </div>
+              ) : (
+                <span className="studio-inline-latex-tag">LaTeX Code</span>
               )}
             </div>
           )}
@@ -356,7 +381,7 @@ export function CVStudioTab({
                   <Pencil size={12} style={{ opacity: 0.7, flexShrink: 0 }} />
                 </span>
               )}
-              {activeDoc.engine && (
+              {activeDoc.engine && activeDoc.engine !== 'typst' && (
                 <EngineBadge engine={activeDoc.engine} />
               )}
               {isDirty && (
@@ -367,46 +392,6 @@ export function CVStudioTab({
             </div>
 
             <div className="studio-actions-group">
-              {/* Zoom Controls in topbar (desktop only) */}
-              <div className="studio-preview-zoom-group studio-zoom-desktop">
-                <button
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => setZoom((z) => Math.max(50, z - 10))}
-                  title="Zoom Out"
-                >
-                  <ZoomOut size={14} />
-                </button>
-                <span className="studio-zoom-indicator">{zoom}%</span>
-                <button
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => setZoom((z) => Math.min(200, z + 10))}
-                  title="Zoom In"
-                >
-                  <ZoomIn size={14} />
-                </button>
-                <button
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => setZoom(100)}
-                  title="Reset Zoom (100%)"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              </div>
-
-              {activeDoc?.engine === 'typst' ? (
-                <span className="studio-page-badge studio-badge-desktop">
-                  {livePageCount} {livePageCount === 1 ? 'Page' : 'Pages'}
-                </span>
-              ) : (
-                activeDoc?.preview_urls && activeDoc.preview_urls.length > 0 && (
-                  <span className="studio-page-badge studio-badge-desktop">
-                    {activeDoc.preview_urls.length} {activeDoc.preview_urls.length === 1 ? 'Page' : 'Pages'}
-                  </span>
-                )
-              )}
-
-              <div className="studio-topbar-divider studio-divider-desktop" />
-
               <button
                 className="btn btn-primary studio-btn-compile"
                 onClick={() => compileDocument()}
@@ -465,29 +450,32 @@ export function CVStudioTab({
         )}
 
         {/* Mobile View Switcher (Editor vs Preview) */}
-        <div className="studio-mobile-switcher">
-          <button
-            className={`studio-mobile-tab-btn ${mobileView === 'editor' ? 'active' : ''}`}
-            onClick={() => setMobileView('editor')}
-          >
-            <Code size={15} />
-            <span>Editor</span>
-          </button>
-          <button
-            className={`studio-mobile-tab-btn ${mobileView === 'preview' ? 'active' : ''}`}
-            onClick={() => setMobileView('preview')}
-          >
-            <Eye size={15} />
-            <span>Preview</span>
-            {activeDoc?.engine === 'typst' ? (
-              <span className="studio-mobile-page-pill">{livePageCount}</span>
-            ) : (
-              activeDoc?.preview_urls && activeDoc.preview_urls.length > 0 && (
-                <span className="studio-mobile-page-pill">{activeDoc.preview_urls.length}</span>
-              )
-            )}
-          </button>
-        </div>
+        {/* Mobile View Switcher (Editor vs Preview) */}
+        {documents.length > 0 && (
+          <div className="studio-mobile-switcher">
+            <button
+              className={`studio-mobile-tab-btn ${mobileView === 'editor' ? 'active' : ''}`}
+              onClick={() => setMobileView('editor')}
+            >
+              <Code size={15} />
+              <span>Editor</span>
+            </button>
+            <button
+              className={`studio-mobile-tab-btn ${mobileView === 'preview' ? 'active' : ''}`}
+              onClick={() => setMobileView('preview')}
+            >
+              <Eye size={15} />
+              <span>Preview</span>
+              {activeDoc?.engine === 'typst' ? (
+                <span className="studio-mobile-page-pill">{livePageCount}</span>
+              ) : (
+                activeDoc?.preview_urls && activeDoc.preview_urls.length > 0 && (
+                  <span className="studio-mobile-page-pill">{activeDoc.preview_urls.length}</span>
+                )
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Split View Area */}
@@ -509,65 +497,22 @@ export function CVStudioTab({
         <div className={`studio-split-view mobile-show-${mobileView}`}>
           {/* Left Pane: Code or Simple Form Editor */}
           <div className="studio-editor-pane">
-            {/* Mode Switcher Header */}
-            <div className="studio-mode-header">
-              {activeDoc?.engine === 'typst' ? (
-                <div className="studio-segmented-mode">
-                  <button
-                    type="button"
-                    className={`studio-mode-btn ${editorMode === 'simple' ? 'active' : ''}`}
-                    onClick={() => handleSwitchMode('simple')}
-                    title="Visual form editor: edit fields and bullets without syntax"
-                  >
-                    <span>Simple</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`studio-mode-btn ${editorMode === 'advanced' ? 'active' : ''}`}
-                    onClick={() => handleSwitchMode('advanced')}
-                    title="Full Typst code editor with line numbers"
-                  >
-                    <span>Advanced</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="studio-mode-badge-latex" title="LaTeX documents are edited in Advanced code mode">
-                  <span>Advanced (LaTeX)</span>
-                </div>
-              )}
+            {editorMode === 'simple' && parsedTypst?.supported && (
+              <StudioJumpBar
+                data={parsedTypst.data}
+                kind={parsedTypst.kind}
+                openSections={simpleOpenSections}
+                setOpenSections={setSimpleOpenSections}
+              />
+            )}
 
-              <div className="studio-mode-meta">
-                {editorMode === 'simple' && simpleSectionKeys.length >= 3 && (
-                  <button
-                    type="button"
-                    className="simple-expand-toggle"
-                    onClick={toggleSimpleAll}
-                    title={allSimpleExpanded ? 'Collapse all sections' : 'Expand all sections'}
-                    aria-label={allSimpleExpanded ? 'Collapse all sections' : 'Expand all sections'}
-                  >
-                    {allSimpleExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-                  </button>
-                )}
-                {editorMode === 'simple' && parsedTypst && (
-                  <span className="studio-mode-pill">
-                    {parsedTypst.kind === 'moderner-cv' ? 'ModernCV Form' : (parsedTypst.kind === 'standard-cv' ? 'Standard CV Form' : 'Cover Letter Form')}
-                  </span>
-                )}
-                {editorMode === 'advanced' && (
-                  <span className="studio-mode-pill-muted">
-                    {lineCount} lines
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Simple Mode vs Advanced Mode View */}
+            {/* Simple Mode vs Code mode View */}
             {editorMode === 'simple' && parsedTypst?.supported ? (
               <TypstSimpleEditor
                 data={parsedTypst.data}
                 kind={parsedTypst.kind}
                 onChange={handleSimpleChange}
-                disabled={saving || compiling || aiEditing}
+                disabled={aiEditing}
                 openSections={simpleOpenSections}
                 setOpenSections={setSimpleOpenSections}
               />
@@ -583,7 +528,7 @@ export function CVStudioTab({
             )}
 
             {/* AI Surgical Assistant Bar */}
-            <div className="studio-ai-bar">
+            <div className={`studio-ai-bar ${mobileChipsOpen ? 'chips-open' : ''}`}>
               <div className="studio-ai-input-row">
                 <Sparkles size={16} className="studio-ai-icon" />
                 <input
@@ -595,6 +540,14 @@ export function CVStudioTab({
                   onKeyDown={(e) => e.key === 'Enter' && handleTriggerAiEdit()}
                   disabled={aiEditing}
                 />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm ai-suggestions-btn"
+                  aria-expanded={mobileChipsOpen}
+                  onClick={() => setMobileChipsOpen((v) => !v)}
+                >
+                  Suggestions
+                </button>
                 <button
                   className="studio-ai-submit-btn"
                   onClick={handleTriggerAiEdit}
@@ -631,6 +584,11 @@ export function CVStudioTab({
 
           {/* Right Pane: Live PDF / Typst WASM Preview */}
           <div className="studio-preview-pane">
+            <FloatingPreviewHud
+              pageCount={activeDoc?.engine === 'typst' ? livePageCount : (activeDoc?.preview_urls?.length || 0)}
+              zoom={zoom}
+              setZoom={setZoom}
+            />
             {activeDoc?.engine !== 'typst' && (isDirty || activeDoc?.pdf_current === false) && (
               <p role="status" className="studio-stale-pdf-banner">The saved PDF is from an earlier version. Compile the current text before using it.</p>
             )}
@@ -642,40 +600,6 @@ export function CVStudioTab({
               />
             ) : (
               <>
-                {/* Mobile-only Preview Toolbar */}
-                <div className="studio-preview-mobile-bar">
-                  <div className="studio-preview-mobile-zoom">
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => setZoom((z) => Math.max(50, z - 10))}
-                      title="Zoom Out"
-                    >
-                      <ZoomOut size={13} />
-                    </button>
-                    <span className="studio-zoom-indicator">{zoom}%</span>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => setZoom((z) => Math.min(200, z + 10))}
-                      title="Zoom In"
-                    >
-                      <ZoomIn size={13} />
-                    </button>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => setZoom(100)}
-                      title="Reset Zoom (100%)"
-                    >
-                      <Maximize2 size={13} />
-                    </button>
-                  </div>
-
-                  {activeDoc?.preview_urls && activeDoc.preview_urls.length > 0 && (
-                    <span className="studio-page-badge">
-                      {activeDoc.preview_urls.length} {activeDoc.preview_urls.length === 1 ? 'Page' : 'Pages'}
-                    </span>
-                  )}
-                </div>
-
                 {/* Error Diagnostics Card */}
                 {activeDoc?.error && (
                   <div className="studio-error-card">
@@ -832,6 +756,7 @@ export function CVStudioTab({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

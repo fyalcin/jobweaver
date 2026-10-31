@@ -112,13 +112,15 @@ export function useJobs({ user, addToast, aiTone }) {
     setSavedViews(loadSavedViews(user.username));
   }, [user?.username]);
 
-  const fetchJobs = useCallback(async () => {
+  const fetchJobs = useCallback(async ({ clearSelection = false } = {}) => {
     setLoading(true);
     try {
       const res = await api.get('/jobs');
       setJobs(res.data);
       setSelectedJobDetails(previous => previous ? res.data.find(job => job.id === previous.id) || previous : previous);
-      setSelectedJobIds(new Set());
+      // A refresh can arrive after the user ticked a box: keep ticks for jobs that still exist.
+      const ids = new Set(res.data.map(job => job.id));
+      setSelectedJobIds(previous => clearSelection ? new Set() : new Set([...previous].filter(id => ids.has(id))));
     } catch {
       addToast('Failed to connect to backend API.', 'error');
     } finally {

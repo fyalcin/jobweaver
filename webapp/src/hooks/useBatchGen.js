@@ -19,7 +19,7 @@ export function useBatchGen({ user, aiTone, addToast, filteredJobs, fetchJobs })
         batchGenPollInterval.current = null;
         setBatchGenTaskId(null);
         setBatchGenProgress(null);
-        fetchJobs();
+        fetchJobs({ clearSelection: true });
         if (status === 'completed') {
           addToast(
             failed > 0

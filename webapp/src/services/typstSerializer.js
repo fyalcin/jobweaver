@@ -2,7 +2,7 @@
  * typstSerializer.js
  * Serializes structured Simple Mode form data back into valid Typst source code.
  */
-import { parseModernerCv, parseStandardCv } from './typstParser.js';
+import { CONTACT_SEPARATOR, contactItemKey, locateStandardContact, locateStandardSubtitle, parseModernerCv, parseStandardCv } from './typstParser.js';
 
 export function typstString(value) {
   return JSON.stringify(String(value ?? '')).slice(1, -1);
@@ -13,26 +13,162 @@ export function typstMarkup(value) {
   return String(value ?? '').replace(/(?<!\\)[#@[\]<>$]/g, '\\$&');
 }
 
+// Drops the source line that held a removed header element, including its line break marker.
+function removeHeaderLine(source, start, end) {
+  const lineStart = source.lastIndexOf('\n', start) + 1;
+  const lineEnd = source.indexOf('\n', end);
+  return source.slice(0, lineStart) + source.slice(lineEnd + 1);
+}
+
+// The subtitle is optional, so Simple Mode can add, edit or remove it in place; other header styling stays exact.
+function setStandardSubtitle(source, value) {
+  const { nameEnd, subtitle } = locateStandardSubtitle(source);
+  if (nameEnd < 0) return null;
+  if (subtitle) {
+    if (!value.trim()) return removeHeaderLine(source, subtitle.start, subtitle.end);
+    return source.slice(0, subtitle.contentStart) + typstMarkup(value) + source.slice(subtitle.contentEnd);
+  }
+  const lineEnd = source.indexOf('\n', nameEnd);
+  if (lineEnd < 0) return null;
+  const indent = source.slice(source.lastIndexOf('\n', nameEnd) + 1).match(/^[ \t]*/)[0];
+  return `${source.slice(0, lineEnd + 1)}${indent}#text(size: 11pt, fill: muted-color)[${typstMarkup(value)}] \\\n${source.slice(lineEnd + 1)}`;
+}
+
+function setStandardName(source, value) {
+  const name = source.match(/(#text\([^)]*weight:\s*"bold"\)\[)(?:\\[\s\S]|[^\]\\])*\]/);
+  if (!name) return null;
+  return `${source.slice(0, name.index)}${name[1]}${typstMarkup(value)}]${source.slice(name.index + name[0].length)}`;
+}
+
+const CONTACT_ORDER = ['address', 'email', 'linkedin', 'github', 'phone'];
+
+function contactItem(key, value) {
+  const text = typstMarkup(value);
+  if (key === 'email') return `#link("mailto:${typstString(value)}")[${text}]`;
+  if (key === 'linkedin') return `#link("https://linkedin.com/in/${typstString(value)}")[linkedin.com/in/${text}]`;
+  if (key === 'github') return `#link("https://github.com/${typstString(value)}")[github.com/${text}]`;
+  return text;
+}
+
+// Edits one contact item in place; items we don't recognise and custom link labels stay as they are.
+function setStandardContact(source, key, oldValue, value) {
+  const contact = locateStandardContact(source);
+  if (!contact) return null;
+  const content = source.slice(contact.contentStart, contact.contentEnd);
+  const indent = content.match(/\n([ \t]*)\S/)?.[1] ?? '';
+  const items = content.trim() ? content.trim().split(CONTACT_SEPARATOR).map(item => item.trim()) : [];
+  const keys = items.map(contactItemKey);
+  const index = keys.indexOf(key);
+  if (index >= 0 && !value) {
+    items.splice(index, 1);
+  } else if (index >= 0) {
+    items[index] = key === 'address' || key === 'phone'
+      ? contactItem(key, value)
+      : items[index].split(typstMarkup(oldValue)).join(typstMarkup(value)).split(oldValue).join(typstString(value));
+  } else if (value) {
+    // New items keep the template's order relative to the ones we know about.
+    const after = keys.reduce((last, itemKey, i) => (CONTACT_ORDER.indexOf(itemKey) >= 0 && CONTACT_ORDER.indexOf(itemKey) < CONTACT_ORDER.indexOf(key) ? i : last), -1);
+    items.splice(after + 1, 0, contactItem(key, value));
+  }
+  const closing = content.match(/\n[ \t]*$/)?.[0] ?? '';
+  const joined = items.join(`\n${indent}#h(0.5em) • #h(0.5em)\n${indent}`);
+  return `${source.slice(0, contact.contentStart)}\n${indent}${joined}${closing}${source.slice(contact.contentEnd)}`;
+}
+
+function setStandardResidence(source, value) {
+  const contact = locateStandardContact(source);
+  if (!contact) return null;
+  const { residence } = contact;
+  if (residence) {
+    if (value.trim()) return source.slice(0, residence.contentStart) + typstMarkup(value) + source.slice(residence.contentEnd);
+    const spacing = source.slice(0, residence.start).match(/\n[ \t]*#v\([^)]*\)[ \t]*\n[ \t]*$/);
+    const start = spacing ? spacing.index + 1 : residence.start;
+    return removeHeaderLine(source, start, residence.end);
+  }
+  const lineEnd = source.indexOf('\n', contact.end);
+  if (lineEnd < 0) return null;
+  const indent = source.slice(source.lastIndexOf('\n', contact.end - 1) + 1).match(/^[ \t]*/)[0];
+  const fill = source.includes('text-color') ? ', fill: text-color' : '';
+  return `${source.slice(0, lineEnd + 1)}${indent}#v(0.1cm)\n${indent}#text(size: 9pt, weight: "bold"${fill})[${typstMarkup(value)}]\n${source.slice(lineEnd + 1)}`;
+}
+
+function setModernerSubtitle(source, value) {
+  const existing = source.match(/subtitle:\s*(text\([^)]*\))?(?:\[(?:\\[\s\S]|[^\]\\])*\]|"[^"]*")\s*,/);
+  if (existing) {
+    const end = existing.index + existing[0].length;
+    if (!value.trim()) return removeHeaderLine(source, existing.index, end);
+    return `${source.slice(0, existing.index)}subtitle: ${existing[1] || ''}[${typstMarkup(value)}],${source.slice(end)}`;
+  }
+  const name = source.match(/^([ \t]*)name:\s*"[^"]*",[ \t]*\n/m);
+  if (!name) return null;
+  const end = name.index + name[0].length;
+  return `${source.slice(0, end)}${name[1]}subtitle: text(size: 14pt)[${typstMarkup(value)}],\n${source.slice(end)}`;
+}
+
+function setModernerName(source, value) {
+  const name = source.match(/name:\s*"(?:\\.|[^"\\])*"/);
+  if (!name) return null;
+  return `${source.slice(0, name.index)}name: "${typstString(value)}"${source.slice(name.index + name[0].length)}`;
+}
+
+function setModernerSocial(source, key, value) {
+  const quoted = '"(?:\\\\.|[^"\\\\])*"';
+  const pattern = key === 'residence' ? `residence:\\s*\\(${quoted},\\s*${quoted},\\s*${quoted}\\)\\s*,?` : `${key}:\\s*${quoted}\\s*,?`;
+  const existing = source.match(new RegExp(pattern));
+  const line = key === 'residence' ? `residence: ("id-card", "#", "${typstString(value)}"),` : `${key}: "${typstString(value)}",`;
+  if (existing) {
+    const end = existing.index + existing[0].length;
+    return value.trim() ? source.slice(0, existing.index) + line + source.slice(end) : removeHeaderLine(source, existing.index, end);
+  }
+  const social = source.match(/social:\s*\(([ \t]*\n)([ \t]*)/);
+  if (!social) return null;
+  const at = social.index + social[0].length;
+  return `${source.slice(0, at)}${line}\n${social[2]}${source.slice(at)}`;
+}
+
+// Built-in header fields are edited where they stand, so repeated text or an empty field can't block Simple Mode.
+function setHeaderField(source, moderner, key, oldValue, value) {
+  if (key === 'name') return moderner ? setModernerName(source, value) : setStandardName(source, value);
+  if (key === 'subtitle') return moderner ? setModernerSubtitle(source, value) : setStandardSubtitle(source, value);
+  if (CONTACT_ORDER.includes(key) || key === 'residence') {
+    if (moderner) return setModernerSocial(source, key, value);
+    return key === 'residence' ? setStandardResidence(source, value) : setStandardContact(source, key, oldValue, value);
+  }
+  return undefined;
+}
+
 function preservePreamble(original, generated, basics) {
   if (!original) return generated;
-  const parsed = original.includes('moderner-cv') ? parseModernerCv(original) : parseStandardCv(original);
+  const moderner = original.includes('moderner-cv');
+  const parsed = moderner ? parseModernerCv(original) : parseStandardCv(original);
   const old = parsed.data?.basics || {};
   let result = original;
   for (const [key, value] of Object.entries(basics)) {
     if (value === old[key]) continue;
     if (!old[key] && !value) continue;
+    const edited = setHeaderField(result, moderner, key, old[key], value);
+    if (edited === null) throw new Error('This header change needs Code mode; the custom design has been preserved.');
+    if (edited !== undefined) {
+      result = edited;
+      continue;
+    }
     if (!old[key] || !result.includes(old[key])) {
-      throw new Error('This header change needs Advanced mode; the custom design has been preserved.');
+      throw new Error('This header change needs Code mode; the custom design has been preserved.');
     }
     // Replace only existing header values; font/margins/language/macros stay exact.
     const encoded = typstString(old[key]);
     const occurrences = result.split(encoded).length - 1;
     if (occurrences !== 1) {
-      throw new Error('This header value appears more than once. Use Advanced mode to preserve your design.');
+      throw new Error('This header value appears more than once. Use Code mode to preserve your design.');
     }
     result = result.replace(encoded, typstString(value));
   }
   return result;
+}
+
+// One blank line between header and body, however often a document is read and written.
+function joinDocument(preamble, sections) {
+  return `${preamble.trimEnd()}\n\n${sections}`.trim() + '\n';
 }
 
 /**
@@ -110,7 +246,7 @@ ${bulletsStr}
     })
     .join('\n');
 
-  return (preservePreamble(originalPreamble, headerPreamble, basics) + '\n' + sectionsMarkup).trim() + '\n';
+  return joinDocument(preservePreamble(originalPreamble, headerPreamble, basics), sectionsMarkup);
 }
 
 /**
@@ -230,7 +366,7 @@ export function serializeStandardCv(data, originalPreamble = '') {
 #align(center)[
   #block(width: 100%)[
     #text(fill: primary-color, size: 22pt, weight: "bold")[${basics.name || 'Alex Muster'}] \\
-    #v(0.15cm)
+    ${basics.subtitle ? `#text(size: 11pt, fill: muted-color)[${typstMarkup(basics.subtitle)}] \\\n    ` : ''}#v(0.15cm)
     #text(size: 9pt, fill: muted-color)[
       ${basics.address || 'Vienna, Austria'}
       ${basics.email ? `#h(0.5em) • #h(0.5em)\n      #link("mailto:${basics.email}")[${basics.email.replace('@', '\\@')}]` : ''}
@@ -277,7 +413,7 @@ export function serializeStandardCv(data, originalPreamble = '') {
     })
     .join('\n');
 
-  return (preservePreamble(originalPreamble, preamble, basics) + '\n' + sectionsMarkup).trim() + '\n';
+  return joinDocument(preservePreamble(originalPreamble, preamble, basics), sectionsMarkup);
 }
 
 /**
@@ -381,7 +517,7 @@ export function serializeTypstDocument(kind, data, originalPreamble = '') {
     return serializeStandardCv(data, originalPreamble);
   }
   if (kind === 'cover-letter') {
-    if (originalPreamble) throw new Error('Custom letter layout needs Advanced mode.');
+    if (originalPreamble) throw new Error('Custom letter layout needs Code mode.');
     return serializeCoverLetter(data);
   }
   throw new Error(`Unsupported template kind for serialization: ${kind}`);

@@ -2,13 +2,13 @@ import { useDemo } from '../demoContext';
 import { MatchEvidence, MatchRating } from './MatchEvidence';
 import { ratingLabel, sourceLabel } from '../constants/ratings';
 import { DemoDocuments } from './DemoDocuments';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ArrowLeft, Sparkles, ExternalLink, Download, RefreshCw,
-  Save, CheckCircle2, FileText, Globe, Building2, MapPin,
-  Calendar, DollarSign, UserCheck, Check, AlertCircle, AlertTriangle,
-  Lightbulb, Briefcase, X, ZoomIn, ZoomOut, Layers, CheckSquare,
-  Play, Maximize2, Code, Layout, Undo2, History, ChevronDown
+  Save, CheckCircle2, FileText, Globe,
+  Check, AlertCircle, AlertTriangle,
+  Lightbulb, Briefcase, X, Layers,
+  Play, Code, Eye, ArrowUpRight, Undo2, History, ChevronDown
 } from 'lucide-react';
 import { StatusSelect } from './StatusControls';
 import { germanLevelLabel } from '../constants/german';
@@ -18,6 +18,8 @@ import { TypstWasmPreview } from './studio/TypstWasmPreview';
 import { TypstSimpleEditor } from './studio/TypstSimpleEditor';
 import { StudioCodeEditor } from './studio/StudioCodeEditor';
 import { EngineBadge } from './studio/EngineBadge';
+import { StudioJumpBar, FloatingPreviewHud } from './studio/StudioChrome';
+import { allSectionsOpen } from './studio/studioSections';
 import { parseTypstDocument } from '../services/typstParser';
 import { serializeTypstDocument } from '../services/typstSerializer';
 
@@ -56,9 +58,13 @@ export function JobDetailPage({
   const [parsedTypst, setParsedTypst] = useState(null);
   const [simpleOpenSections, setSimpleOpenSections] = useState({ basics: true });
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [mobileView, setMobileView] = useState('editor'); // 'editor' | 'preview'
+  const [mobileChipsOpen, setMobileChipsOpen] = useState(false);
+  const [regenOpen, setRegenOpen] = useState(false);
   const isLocalSimpleEditRef = useRef(false);
   const textareaRef = useRef(null);
   const exportMenuRef = useRef(null);
+  const openedDocKeyRef = useRef(null);
 
   // Close export dropdown on outside click
   useEffect(() => {
@@ -72,6 +78,13 @@ export function JobDetailPage({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showExportMenu]);
+
+  // Every section starts open when a document first loads; later folds are left alone.
+  const openSectionsOnce = useCallback((key, res) => {
+    if (openedDocKeyRef.current === key) return;
+    openedDocKeyRef.current = key;
+    setSimpleOpenSections(allSectionsOpen(res.data, res.kind));
+  }, []);
 
   // Parse Typst source for Simple mode (Lazy parse: only parse when in Simple mode)
   useEffect(() => {
@@ -87,6 +100,7 @@ export function JobDetailPage({
       const res = parseTypstDocument(studio.currentTex, docKind);
       if (res.supported) {
         setParsedTypst(res);
+        openSectionsOnce(`${job?.id}:${studio.activeDocType}:${res.kind}`, res);
       } else {
         setParsedTypst(null);
         if (editorMode === 'simple') {
@@ -97,7 +111,7 @@ export function JobDetailPage({
       setParsedTypst(null);
       setEditorMode('advanced');
     }
-  }, [studio.docEngine, studio.currentTex, studio.activeDocType, editorMode]);
+  }, [studio.docEngine, studio.currentTex, studio.activeDocType, editorMode, job?.id, openSectionsOnce]);
 
   // Synchronize format selector with active document engine when documents exist
   useEffect(() => {
@@ -115,6 +129,7 @@ export function JobDetailPage({
       const res = parseTypstDocument(studio.currentTex, docKind);
       if (res.supported) {
         setParsedTypst(res);
+        openSectionsOnce(`${job?.id}:${studio.activeDocType}:${res.kind}`, res);
         setEditorMode('simple');
       }
     } else {
@@ -131,7 +146,7 @@ export function JobDetailPage({
       isLocalSimpleEditRef.current = true;
       studio.setCurrentTex(newSource);
     } catch (err) {
-      studio.setErrorCard({ message: err.message || 'This change needs Advanced mode.', parsed: null, rawLog: '' });
+      studio.setErrorCard({ message: err.message || 'This change needs Code mode.', parsed: null, rawLog: '' });
       setEditorMode('advanced');
       setParsedTypst(parsedTypst);
     }
@@ -237,43 +252,62 @@ export function JobDetailPage({
   const workModel = job.work_model || job.data?.work_model || 'Full-time';
   const experienceYears = job.experience_years || job.data?.experience_years || 'Not specified';
   const educationLevel = job.education_level || job.data?.education_level || 'Not specified';
-
-  const editorLines = (studio.currentTex || '').split('\n');
+  const hasExistingDocs = Boolean(studio.cvDownloadUrl || job.cv_url || studio.clDownloadUrl || job.letter_url || studio.hasCv || studio.hasLetter);
+  const salaryLabel = job.salary_yearly
+    ? `€${Number(job.salary_yearly).toLocaleString('de-AT')} / yr`
+    : (job.salary && job.salary !== 'Not Specified' ? job.salary : 'Salary not stated');
+  const germanLabel = germanLevelLabel(job.german_level ?? job.requires_german);
+  const eligibilityNotes = [...(job.eligibility?.blockers || []), ...(job.eligibility?.unknowns || [])];
+  const hasStudioDocument = studio.loading || studio.hasCv || studio.hasLetter || Boolean(studio.currentTex);
+  // Finalizing needs a saved build, and Typst has no autosave here: Compile stays reachable until the draft is built,
+  // and after any failure, whose message may ask for a compile even when this draft looks current.
+  const typstNeedsCompile = studio.docEngine === 'typst' && Boolean(studio.currentTex) && (!studio.pdfCurrent || Boolean(studio.errorCard));
+  const pdfLink = (studio.activeDocType === 'cv' ? studio.cvDownloadUrl : studio.clDownloadUrl) ||
+    (studio.activeDocType === 'cv' ? job.cv_url : job.letter_url);
 
   return (
     <div className={`job-detail-page ${activeSubTab === 'studio' ? 'studio-mode-active' : ''}`}>
       {/* Top sticky navigation bar with View Sub-Tabs */}
       <div className="job-detail-topbar">
-        <button className="btn btn-secondary btn-back" onClick={onBack}>
-          <ArrowLeft size={18} />
-          <span>Back to Jobs</span>
-        </button>
+        <div className="job-topbar-left">
+          <button type="button" className="btn btn-secondary btn-sm btn-back" aria-label="Back to Jobs" onClick={onBack}>
+            <ArrowLeft size={16} />
+            <span>Jobs</span>
+          </button>
 
-        {/* Subtabs Segmented Switcher */}
-        <div className="job-subtabs-nav" role="tablist" aria-label="Job views">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeSubTab === 'job-fit'}
-            className={`job-subtab-btn ${activeSubTab === 'job-fit' ? 'active' : ''}`}
-            onClick={() => setActiveSubTab('job-fit')}
-          >
-            <Briefcase size={15} />
-            <span>Job & Fit</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeSubTab === 'studio'}
-            className={`job-subtab-btn ${activeSubTab === 'studio' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveSubTab('studio');
-              studio.fetchDocuments();
-            }}
-          >
-            <FileText size={15} />
-            <span>Tailor Studio</span>
-          </button>
+          {/* Subtabs Segmented Switcher */}
+          <div className="job-subtabs" role="tablist" aria-label="Job views">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSubTab === 'job-fit'}
+              className={activeSubTab === 'job-fit' ? 'active' : ''}
+              onClick={() => setActiveSubTab('job-fit')}
+            >
+              <Briefcase size={14} />
+              <span>Job &amp; Fit</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeSubTab === 'studio'}
+              className={activeSubTab === 'studio' ? 'active' : ''}
+              onClick={() => {
+                setActiveSubTab('studio');
+                studio.fetchDocuments();
+              }}
+            >
+              <FileText size={14} />
+              <span>Tailor Studio</span>
+              {hasExistingDocs && <span className="subtab-dot" aria-hidden="true" title="Documents ready" />}
+            </button>
+          </div>
+
+          {activeSubTab === 'studio' && (
+            <span className="topbar-job-crumb hide-mobile" title={`${job.title} · ${job.company}`}>
+              {job.title} <span className="topbar-job-crumb-company">· {job.company}</span>
+            </span>
+          )}
         </div>
 
         <div className="job-detail-topbar-actions">
@@ -286,10 +320,10 @@ export function JobDetailPage({
               href={job.job_url}
               target="_blank"
               rel="noreferrer"
-              className="btn btn-secondary btn-icon-text"
+              className="btn btn-secondary btn-sm"
               title="Open original job posting"
             >
-              <ExternalLink size={16} />
+              <ExternalLink size={14} />
               <span className="hide-mobile">View Posting</span>
             </a>
           )}
@@ -301,93 +335,172 @@ export function JobDetailPage({
         {/* TAB 1: JOB COCKPIT (Job & Fit) */}
         {activeSubTab === 'job-fit' && (
           <>
-            {/* Header Summary Banner */}
-            <header className="job-detail-header-card">
-              <div className="job-detail-header-main">
-                <div className="job-detail-title-group">
-                  <h1 className="job-detail-title">{job.title}</h1>
-                  <div className="job-detail-meta-row">
-                    <span className="job-detail-company">
-                      <Building2 size={16} /> {job.company}
+            {/* Job hero: identity, rating, summary and the next document action */}
+            <section className="job-hero-card">
+              <div className="job-hero-top">
+                <div>
+                  <h2>{job.title}</h2>
+                  <div className="job-meta-inline">
+                    <span><strong>{job.company}</strong></span>
+                    {job.location && <span>· {job.location}</span>}
+                    {workModel && workModel !== 'Unknown' && <span>· {workModel}</span>}
+                    <span>· German: {germanLabel}</span>
+                    <span className="job-meta-salary">· {salaryLabel}</span>
+                    {job.date_scraped && <span>· Found {formatDateDisplay(job.date_scraped)}</span>}
+                    {job.source && <span>· {sourceLabel(job.source)}</span>}
+                    {job.company_contact && <span>· Contact: {job.company_contact}</span>}
+                    {job.application_date && <span>· Applied {formatDateDisplay(job.application_date)}</span>}
+                  </div>
+                </div>
+                <div className="job-hero-rating">
+                  <MatchRating job={job} />
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={demo || !!reprocessTaskId} onClick={() => handleStartReprocess(job.id)}>
+                    {reprocessTaskId ? 'Rating in progress…' : 'Re-rate'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="job-action-strip">
+                <div className="job-summary-line">
+                  <span>{job.summary || 'Summary unavailable.'}</span>
+                  {job.eligibility && (
+                    <span className={`job-eligibility-pill ${(job.eligibility.blockers || []).length > 0 ? 'is-blocked' : ''}`}>
+                      {job.eligibility.label}
                     </span>
-                    {job.location && (
-                      <span className="job-detail-location">
-                        <MapPin size={16} /> {job.location}
-                      </span>
-                    )}
-                    {job.date_scraped && (
-                      <span className="job-detail-date">
-                        <Calendar size={15} /> Found {formatDateDisplay(job.date_scraped)}
-                      </span>
-                    )}
-                    {job.source && (
-                      <span className="badge badge-source">
-                        <Globe size={13} style={{ marginRight: '4px' }} />
-                        {sourceLabel(job.source)}
-                      </span>
-                    )}
-                    {workModel && workModel !== 'Unknown' && (
-                      <span className="badge badge-source">
-                        <Briefcase size={13} style={{ marginRight: '4px' }} />
-                        {workModel}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  {eligibilityNotes.length > 0 && (
+                    <div className="job-eligibility-notes" role="status">
+                      {eligibilityNotes.map((reason) => <p key={reason}>{reason}</p>)}
+                    </div>
+                  )}
                 </div>
 
-                <div className="job-detail-rating">
-                  <span>Match rating</span><MatchRating job={job} />
-                  <button className="btn btn-secondary" disabled={demo || !!reprocessTaskId} onClick={() => handleStartReprocess(job.id)}>{reprocessTaskId ? 'Rating in progress…' : 'Re-rate'}</button>
+                <div className="job-cta-cluster">
+                  {hasExistingDocs ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                          setActiveSubTab('studio');
+                          studio.fetchDocuments();
+                        }}
+                      >
+                        <FileText size={15} />
+                        <span>Open in Tailor Studio</span>
+                        <ArrowUpRight size={14} />
+                      </button>
+
+                      {Boolean(studio.cvDownloadUrl || job.cv_url || studio.clDownloadUrl || job.letter_url) && (
+                        <div className="cockpit-export-group" ref={exportMenuRef}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary cockpit-export-btn"
+                            onClick={() => setShowExportMenu(prev => !prev)}
+                            aria-expanded={showExportMenu}
+                            title="Export generated PDFs"
+                          >
+                            <Download size={14} />
+                            <span>Export PDF</span>
+                            <ChevronDown size={13} style={{ transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                          </button>
+                          {showExportMenu && (
+                            <div className="cockpit-export-menu">
+                              {(studio.cvDownloadUrl || job.cv_url) && (
+                                <a
+                                  href={studio.cvDownloadUrl || job.cv_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="cockpit-export-item"
+                                  onClick={() => setShowExportMenu(false)}
+                                >
+                                  <FileText size={15} className="cockpit-export-item-icon" />
+                                  <div className="cockpit-export-item-text">
+                                    <span className="cockpit-export-item-title">CV (PDF)</span>
+                                  </div>
+                                </a>
+                              )}
+                              {(studio.clDownloadUrl || job.letter_url) && (
+                                <a
+                                  href={studio.clDownloadUrl || job.letter_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="cockpit-export-item"
+                                  onClick={() => setShowExportMenu(false)}
+                                >
+                                  <FileText size={15} className="cockpit-export-item-icon" />
+                                  <div className="cockpit-export-item-text">
+                                    <span className="cockpit-export-item-title">Cover Letter (PDF)</span>
+                                  </div>
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setRegenOpen((v) => !v)}
+                        aria-expanded={regenOpen}
+                        disabled={demo}
+                      >
+                        <RefreshCw size={13} />
+                        <span>Regenerate</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <label className="compact-toggle-label">
+                        <input type="checkbox" checked={compact} onChange={(e) => setCompact(e.target.checked)} />
+                        <span>Compact CV</span>
+                      </label>
+                      <select
+                        aria-label="Document engine format"
+                        className="input-base job-engine-select"
+                        value={selectedEngine}
+                        onChange={(e) => setSelectedEngine(e.target.value)}
+                      >
+                        <option value="typst">Typst</option>
+                        <option value="latex">LaTeX</option>
+                      </select>
+                      {handleJobsGenerateBoth && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => handleJobsGenerateBoth(job, { compact, engine: selectedEngine })}
+                          disabled={demo || isGeneratingBoth}
+                        >
+                          <FileText size={15} />
+                          <span>{isGeneratingBoth ? 'Generating…' : 'Generate CV & Letter'}</span>
+                        </button>
+                      )}
+                      {handleJobsGenerateCV && (
+                        <button type="button" className="btn btn-secondary" onClick={() => handleJobsGenerateCV(job, { compact, engine: selectedEngine })} disabled={demo || isGeneratingCV}>
+                          {isGeneratingCV ? 'Generating…' : 'CV Only'}
+                        </button>
+                      )}
+                      {handleJobsGenerateLetter && (
+                        <button type="button" className="btn btn-secondary" onClick={() => handleJobsGenerateLetter(job, { engine: selectedEngine })} disabled={demo || isGeneratingCL}>
+                          {isGeneratingCL ? 'Generating…' : 'Letter Only'}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Quick info badges row */}
-              <div className="job-detail-badges-row">
-                <div className="info-chip">
-                  <span className="info-chip-label">German:</span>
-                  <span className="info-chip-val">
-                    {germanLevelLabel(job.german_level ?? job.requires_german)}
-                  </span>
-                </div>
-                <div className="info-chip">
-                  <span className="info-chip-label">Salary:</span>
-                  <span className="info-chip-val" style={{ color: 'var(--success-color)', fontWeight: 600 }}>
-                    {job.salary_yearly
-                      ? `€${Number(job.salary_yearly).toLocaleString('de-AT')} / year`
-                      : (job.salary || 'Not specified')}
-                  </span>
-                </div>
-                {job.company_contact && (
-                  <div className="info-chip">
-                    <span className="info-chip-label"><UserCheck size={14} /> Contact:</span>
-                    <span className="info-chip-val">{job.company_contact}</span>
-                  </div>
-                )}
-                {job.application_date && (
-                  <div className="info-chip">
-                    <span className="info-chip-label">Applied on:</span>
-                    <span className="info-chip-val">{formatDateDisplay(job.application_date)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Document Generation Action Bar */}
-              <div className="job-detail-actions-panel">
-                <div className="job-detail-actions-left" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <label className="compact-toggle-label">
-                    <input
-                      type="checkbox"
-                      checked={compact}
-                      onChange={(e) => setCompact(e.target.checked)}
-                    />
-                    <span>Compact CV</span>
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Format:</span>
+              {regenOpen && hasExistingDocs && (
+                <div className="job-regen-strip">
+                  <div className="job-regen-options">
+                    <label className="compact-toggle-label">
+                      <input type="checkbox" checked={compact} onChange={(e) => setCompact(e.target.checked)} />
+                      <span>Compact CV</span>
+                    </label>
                     <select
                       aria-label="Document engine format"
-                      className="input-base"
-                      style={{ height: '28px', fontSize: '0.8rem', width: 'auto' }}
+                      className="input-base job-engine-select"
                       value={selectedEngine}
                       onChange={(e) => setSelectedEngine(e.target.value)}
                     >
@@ -395,128 +508,64 @@ export function JobDetailPage({
                       <option value="latex">LaTeX</option>
                     </select>
                   </div>
-                </div>
-
-                <div className="job-detail-actions-buttons">
-                  {handleJobsGenerateBoth && (
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleJobsGenerateBoth(job, { compact, engine: selectedEngine })}
-                      disabled={demo || isGeneratingBoth}
-                    >
-                      <FileText size={15} />
-                      <span>{isGeneratingBoth ? 'Generating Both…' : 'Generate Both'}</span>
-                    </button>
-                  )}
-                  {handleJobsGenerateCV && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleJobsGenerateCV(job, { compact, engine: selectedEngine })}
-                      disabled={demo || isGeneratingCV}
-                    >
-                      {isGeneratingCV ? 'Generating CV…' : 'Generate CV'}
-                    </button>
-                  )}
-                  {handleJobsGenerateLetter && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleJobsGenerateLetter(job, { engine: selectedEngine })}
-                      disabled={demo || isGeneratingCL}
-                    >
-                      {isGeneratingCL ? 'Generating Letter…' : 'Generate Letter'}
-                    </button>
-                  )}
-                  {Boolean(studio.cvDownloadUrl || job.cv_url || studio.clDownloadUrl || job.letter_url) && (
-                    <div className="cockpit-export-group" ref={exportMenuRef}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary cockpit-export-btn"
-                        onClick={() => setShowExportMenu(prev => !prev)}
-                        aria-expanded={showExportMenu}
-                        title="Export generated PDFs"
-                      >
-                        <Download size={15} />
-                        <span>Export</span>
-                        <ChevronDown size={14} style={{ transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }} />
+                  <div className="job-regen-actions">
+                    {handleJobsGenerateBoth && (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleJobsGenerateBoth(job, { compact, engine: selectedEngine })} disabled={demo || isGeneratingBoth}>
+                        {isGeneratingBoth ? 'Regenerating…' : 'Regenerate Both'}
                       </button>
-                      {showExportMenu && (
-                        <div className="cockpit-export-menu">
-                          {(studio.cvDownloadUrl || job.cv_url) && (
-                            <a
-                              href={studio.cvDownloadUrl || job.cv_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="cockpit-export-item"
-                              onClick={() => setShowExportMenu(false)}
-                            >
-                              <FileText size={15} className="cockpit-export-item-icon" />
-                              <div className="cockpit-export-item-text">
-                                <span className="cockpit-export-item-title">Curriculum Vitae</span>
-                                <span className="cockpit-export-item-sub">PDF Download</span>
-                              </div>
-                            </a>
-                          )}
-                          {(studio.clDownloadUrl || job.letter_url) && (
-                            <a
-                              href={studio.clDownloadUrl || job.letter_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="cockpit-export-item"
-                              onClick={() => setShowExportMenu(false)}
-                            >
-                              <FileText size={15} className="cockpit-export-item-icon" />
-                              <div className="cockpit-export-item-text">
-                                <span className="cockpit-export-item-title">Motivational Letter</span>
-                                <span className="cockpit-export-item-sub">PDF Download</span>
-                              </div>
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                    {handleJobsGenerateCV && (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleJobsGenerateCV(job, { compact, engine: selectedEngine })} disabled={demo || isGeneratingCV}>
+                        Regenerate CV
+                      </button>
+                    )}
+                    {handleJobsGenerateLetter && (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleJobsGenerateLetter(job, { engine: selectedEngine })} disabled={demo || isGeneratingCL}>
+                        Regenerate Letter
+                      </button>
+                    )}
+                  </div>
                 </div>
+              )}
+            </section>
+
+            <div className="job-kpi-ribbon">
+              <div className="job-kpi-cell">
+                <span className="job-kpi-label">Match Rating</span>
+                <span className="job-kpi-val">{matchTier}</span>
               </div>
-            </header>
+              <div className="job-kpi-cell">
+                <span className="job-kpi-label">Eligibility</span>
+                <span className="job-kpi-val">{job.eligibility?.label || 'Clear'}</span>
+              </div>
+              <div className="job-kpi-cell">
+                <span className="job-kpi-label">German Requirement</span>
+                <span className="job-kpi-val">{germanLabel}</span>
+              </div>
+              <div className="job-kpi-cell">
+                <span className="job-kpi-label">Compensation</span>
+                <span className="job-kpi-val">{salaryLabel}</span>
+              </div>
+            </div>
 
             <div className="cockpit-layout-grid">
             {/* LEFT COLUMN: THE JOB SPEC */}
             <div className="cockpit-left-col">
-              {/* AI Summary Card */}
-              <section className="cockpit-ai-summary-card">
-                <div className="cockpit-summary-badge">
-                  Summary
-                </div>
-                <p className="cockpit-summary-text">{job.summary || 'Summary unavailable.'}</p>
-                {job.eligibility && (
-                  <div role="status">
-                    <strong>Eligibility: {job.eligibility.label}</strong>
-                    {[...(job.eligibility.blockers || []), ...(job.eligibility.unknowns || [])].map((reason) => <p key={reason}>{reason}</p>)}
-                  </div>
-                )}
-              </section>
-
               <MatchEvidence job={job} />
 
-              {/* Metadata Grid (2x2) */}
-              <section className="cockpit-meta-grid">
-                <div className="cockpit-meta-item">
-                  <span className="cockpit-meta-label">Work Experience</span>
-                  <span className="cockpit-meta-val">{experienceYears}</span>
-                </div>
-                <div className="cockpit-meta-item">
-                  <span className="cockpit-meta-label">Education</span>
-                  <span className="cockpit-meta-val">{educationLevel}</span>
-                </div>
-                <div className="cockpit-meta-item">
-                  <span className="cockpit-meta-label">Work Model</span>
-                  <span className="cockpit-meta-val">{workModel}</span>
-                </div>
-                <div className="cockpit-meta-item">
-                  <span className="cockpit-meta-label">Language Level</span>
-                  <span className="cockpit-meta-val">{germanLevelLabel(job.german_level ?? job.requires_german)}</span>
-                </div>
-              </section>
+              {/* Metadata Grid: the rest of the facts live in the hero and ribbon */}
+              {(experienceYears !== 'Not specified' || educationLevel !== 'Not specified') && (
+                <section className="cockpit-meta-grid">
+                  <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">Work Experience</span>
+                    <span className="cockpit-meta-val">{experienceYears}</span>
+                  </div>
+                  <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">Education</span>
+                    <span className="cockpit-meta-val">{educationLevel}</span>
+                  </div>
+                </section>
+              )}
 
               {/* Tools & Technologies */}
               {toolsList.length > 0 && (
@@ -575,7 +624,6 @@ export function JobDetailPage({
                       <p>Interpretation of the recorded evidence</p>
                     </div>
                   </div>
-                  <MatchRating job={job} />
                 </div>
 
                 <div className="cockpit-synthesis-box">
@@ -652,12 +700,7 @@ export function JobDetailPage({
                 <div className="section-card-header">
                   <div className="section-card-title-group">
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                        <h2 className="section-card-title">Company Notes &amp; Research</h2>
-                        <span className="sonar-brand-badge">
-                          Perplexity Sonar
-                        </span>
-                      </div>
+                      <h2 className="section-card-title">Company Notes &amp; Research</h2>
                       <div className="section-card-subtitle">
                         {job.company_research_updated_at ? (
                           <span>Last researched {formatTimestamp(job.company_research_updated_at)}</span>
@@ -670,15 +713,15 @@ export function JobDetailPage({
 
                   <div className="section-card-actions">
                     <button
-                      className="btn btn-primary btn-sonar"
+                      className="btn btn-secondary btn-sonar"
                       onClick={handleResearchClick}
                       disabled={demo || researching}
                     >
                       <RefreshCw size={15} className={researching ? 'spin' : ''} />
-                      <span>{researching ? 'Researching…' : (researchText ? 'Refresh notes' : 'Fetch notes')}</span>
+                      <span>{researching ? 'Researching…' : (researchText ? 'Refresh notes' : 'Fetch web notes')}</span>
                     </button>
                     <button
-                      className="btn btn-secondary btn-save-notes"
+                      className="btn btn-primary btn-save-notes"
                       onClick={handleSaveNotesClick}
                       disabled={demo || savingNotes || !isDirty}
                     >
@@ -706,6 +749,7 @@ export function JobDetailPage({
                   </div>
 
                   <textarea readOnly={demo}
+                    aria-label="Company research notes"
                     className="research-textarea"
                     value={researchText}
                     onChange={(e) => {
@@ -725,41 +769,19 @@ export function JobDetailPage({
         {/* TAB 2: IN-JOB TAILOR STUDIO */}
         {activeSubTab === 'studio' && demo && <DemoDocuments key={job.id} job={job} />}
         {activeSubTab === 'studio' && !demo && (
-          <>
-            {/* Sleek 1-line Job Context Bar */}
-            <div className="studio-job-context-bar">
-              <div className="studio-job-context-info">
-                <span className="studio-job-context-title">{job.title}</span>
-                <span className="studio-job-context-company">
-                  <Building2 size={14} /> {job.company}
-                </span>
-                {job.location && (
-                  <span className="studio-job-context-location hide-mobile">
-                    <MapPin size={13} /> {job.location}
-                  </span>
-                )}
-                <MatchRating job={job} />
-                {job.salary_yearly && (
-                  <span className="studio-job-context-salary hide-mobile">
-                    €{Number(job.salary_yearly).toLocaleString('de-AT')}/yr
-                  </span>
-                )}
-              </div>
-            </div>
-
             <div className="studio-container job-studio-container">
             {/* Top Action & Navigation Bar */}
-            <div className="studio-topbar">
+            <div className={`studio-topbar${studio.docEngine === 'typst' ? ' engine-typst' : ''}${typstNeedsCompile ? ' needs-compile' : ''}`}>
               <div className="studio-topbar-row-main">
-                <div className="job-doc-switcher">
+                <div className="job-doc-switcher studio-doc-tabs">
                   <button
                     type="button"
                     className={`job-doc-btn ${studio.activeDocType === 'cv' ? 'active' : ''} ${!studio.hasCv && !studio.cvTex ? 'disabled' : ''}`}
                     onClick={() => studio.setActiveDocType('cv')}
                     disabled={!studio.hasCv && !studio.cvTex}
                   >
-                    <span>Curriculum Vitae</span>
-                    {studio.hasCv && studio.cvEngine && (
+                    <span>CV</span>
+                    {studio.hasCv && studio.cvEngine === 'latex' && (
                       <EngineBadge engine={studio.cvEngine} size="sm" />
                     )}
                   </button>
@@ -769,67 +791,45 @@ export function JobDetailPage({
                     onClick={() => studio.setActiveDocType('letter')}
                     disabled={!studio.hasLetter && !studio.clTex}
                   >
-                    <span>Motivational Letter</span>
-                    {studio.hasLetter && studio.clEngine && (
+                    <span>Cover Letter</span>
+                    {studio.hasLetter && studio.clEngine === 'latex' && (
                       <EngineBadge engine={studio.clEngine} size="sm" />
                     )}
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  className={`btn btn-secondary btn-sm ${studio.showCheatSheet ? 'active' : ''}`}
-                  onClick={() => studio.setShowCheatSheet(!studio.showCheatSheet)}
-                  title="View job requirements & match tips alongside editor"
-                >
-                  <Layers size={14} />
-                  <span>Job Cheat Sheet</span>
-                </button>
+                {Boolean(studio.currentTex) && (
+                  <div className="studio-inline-mode-group">
+                    {studio.docEngine === 'typst' ? (
+                      <div className="studio-inline-mode-toggle" role="group" aria-label="Editor mode">
+                        <button
+                          type="button"
+                          className={`studio-inline-mode-btn ${editorMode === 'simple' ? 'active' : ''}`}
+                          aria-pressed={editorMode === 'simple'}
+                          onClick={() => handleSwitchMode('simple')}
+                          title="Structured visual form editor"
+                        >
+                          Simple
+                        </button>
+                        <button
+                          type="button"
+                          className={`studio-inline-mode-btn ${editorMode === 'advanced' ? 'active' : ''}`}
+                          aria-pressed={editorMode === 'advanced'}
+                          onClick={() => handleSwitchMode('advanced')}
+                          title="Typst source code editor"
+                        >
+                          Code
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="studio-inline-latex-tag">LaTeX Code</span>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Actions Group: Zoom Controls + Compile + Save + PDF */}
+              {/* Actions Group: Version + Cheat Sheet + Compile + PDF + Save as Final */}
               <div className="studio-actions-group">
-                {/* Zoom Controls in topbar (desktop only) */}
-                <div className="studio-preview-zoom-group studio-zoom-desktop">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => studio.setZoom((z) => Math.max(50, z - 10))}
-                    title="Zoom Out"
-                  >
-                    <ZoomOut size={14} />
-                  </button>
-                  <span className="studio-zoom-indicator">{studio.zoom}%</span>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => studio.setZoom((z) => Math.min(200, z + 10))}
-                    title="Zoom In"
-                  >
-                    <ZoomIn size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => studio.setZoom(100)}
-                    title="Reset Zoom (100%)"
-                  >
-                    <Maximize2 size={14} />
-                  </button>
-                </div>
-
-                {studio.docEngine === 'typst' ? (
-                  <span className="studio-page-badge studio-badge-desktop">
-                    {studioPageCount} {studioPageCount === 1 ? 'Page' : 'Pages'}
-                  </span>
-                ) : (
-                  studio.currentImages && studio.currentImages.length > 0 && (
-                    <span className="studio-page-badge studio-badge-desktop">
-                      {studio.currentImages.length} {studio.currentImages.length === 1 ? 'Page' : 'Pages'}
-                    </span>
-                  )
-                )}
-
                 {/* AI Versions Dropdown & Restore Control */}
                 {studio.aiVersions?.[studio.activeDocType]?.length > 0 && (
                   <div className="studio-version-control" title="View and switch between versions before and after AI refinements">
@@ -845,22 +845,37 @@ export function JobDetailPage({
                       disabled={studio.compiling || studio.aiEditing}
                     >
                       <option value="" disabled={Boolean(studio.activeVersionId)}>
-                        {studio.activeVersionId ? 'Select Version…' : 'Current Draft (Edited)'} ({studio.aiVersions[studio.activeDocType].length})
+                        {studio.activeVersionId ? 'Select Version…' : 'Current Draft'}
                       </option>
-                      {studio.aiVersions[studio.activeDocType].map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.date_str ? `${v.date_str} – ` : ''}{v.label}
-                        </option>
-                      ))}
+                      {studio.aiVersions[studio.activeDocType].map((v) => {
+                        const shortTime = v.date_str ? v.date_str.split(' ').pop() : '';
+                        return (
+                          <option key={v.id} value={v.id}>
+                            {`${v.label}${shortTime ? ` (${shortTime})` : ''}`}
+                          </option>
+                        );
+                      })}
                     </select>
+                    <ChevronDown size={12} className="studio-version-chevron" />
                   </div>
                 )}
 
-                <div className="studio-topbar-divider studio-divider-desktop" />
+                {hasStudioDocument && (
+                  <button
+                    type="button"
+                    className={`btn btn-secondary btn-sm ${studio.showCheatSheet ? 'active' : ''}`}
+                    onClick={() => studio.setShowCheatSheet(!studio.showCheatSheet)}
+                    aria-pressed={studio.showCheatSheet}
+                    title="View job requirements & match tips alongside editor"
+                  >
+                    <Layers size={14} />
+                    <span>Cheat Sheet</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
-                  className="btn btn-primary studio-btn-compile"
+                  className="btn btn-secondary btn-sm studio-btn-compile"
                   onClick={studio.compile}
                   disabled={studio.compiling || studio.loading || !studio.currentTex}
                   title={studio.docEngine === 'typst' ? 'Compile & sync PDF to disk (pure WASM)' : 'Recompile document with pdflatex (Ctrl+Enter)'}
@@ -869,9 +884,32 @@ export function JobDetailPage({
                   <span>{studio.compiling ? 'Compiling…' : 'Compile'}</span>
                 </button>
 
+                {studio.docEngine === 'typst' ? (
+                  <button
+                    type="button"
+                    onClick={() => studio.downloadClientPdf()}
+                    className="btn btn-secondary btn-sm studio-btn-pdf"
+                    title="Instant client-side PDF download (pure WASM)"
+                  >
+                    <Download size={15} /><span className="btn-label-desktop">PDF</span>
+                  </button>
+                ) : (
+                  pdfLink && (
+                    <a
+                      href={pdfLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-secondary btn-sm studio-btn-pdf"
+                      title="Download compiled PDF"
+                    >
+                      <Download size={15} /><span className="btn-label-desktop">PDF</span>
+                    </a>
+                  )
+                )}
+
                 <button
                   type="button"
-                  className="btn btn-secondary studio-btn-save"
+                  className="btn btn-primary btn-sm studio-btn-save-final"
                   onClick={studio.finalize}
                   disabled={studio.saving || studio.compiling}
                   title="Promote draft to official user outputs"
@@ -879,36 +917,71 @@ export function JobDetailPage({
                   {studio.saving ? <RefreshCw className="spinner" size={15} /> : <Save size={15} />}
                   <span className="btn-label-desktop">{studio.saving ? 'Saving…' : 'Save as Final'}</span>
                 </button>
+              </div>
 
-                {studio.docEngine === 'typst' ? (
+              {/* Mobile View Switcher (Editor vs Preview) */}
+              {hasStudioDocument && (
+                <div className="studio-mobile-switcher">
                   <button
                     type="button"
-                    onClick={() => studio.downloadClientPdf()}
-                    className="btn btn-secondary studio-btn-pdf"
-                    title="Instant client-side PDF download (pure WASM)"
+                    className={`studio-mobile-tab-btn ${mobileView === 'editor' ? 'active' : ''}`}
+                    onClick={() => setMobileView('editor')}
                   >
-                    <Download size={15} /><span className="btn-label-desktop">PDF</span>
+                    <Code size={15} />
+                    <span>Editor</span>
                   </button>
-                ) : (
-                  ((studio.activeDocType === 'cv' ? studio.cvDownloadUrl : studio.clDownloadUrl) ||
-                    (studio.activeDocType === 'cv' ? job.cv_url : job.letter_url)) && (
-                    <a
-                      href={(studio.activeDocType === 'cv' ? studio.cvDownloadUrl : studio.clDownloadUrl) ||
-                            (studio.activeDocType === 'cv' ? job.cv_url : job.letter_url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-secondary studio-btn-pdf"
-                      title="Download compiled PDF"
-                    >
-                      <Download size={15} /><span className="btn-label-desktop">PDF</span>
-                    </a>
-                  )
-                )}
-              </div>
+                  <button
+                    type="button"
+                    className={`studio-mobile-tab-btn ${mobileView === 'preview' ? 'active' : ''}`}
+                    onClick={() => setMobileView('preview')}
+                  >
+                    <Eye size={15} />
+                    <span>Preview</span>
+                    {studio.docEngine === 'typst' ? (
+                      <span className="studio-mobile-page-pill">{studioPageCount}</span>
+                    ) : (
+                      studio.currentImages?.length > 0 && (
+                        <span className="studio-mobile-page-pill">{studio.currentImages.length}</span>
+                      )
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
+            {/* Diagnostic Error Card: above the panes so phones see it in Editor view too */}
+            {studio.errorCard && (
+              <div className="studio-error-card">
+                <div className="studio-error-header">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <AlertTriangle size={16} /> Compilation Diagnostic
+                  </span>
+                  {studio.errorCard.rawLog && (
+                    <button
+                      type="button"
+                      className="studio-toggle-log-btn"
+                      onClick={() => setShowRawLog(!showRawLog)}
+                    >
+                      {showRawLog ? 'Hide Raw Log' : 'View Full Log'}
+                    </button>
+                  )}
+                </div>
+                <div className="studio-error-message">{studio.errorCard.message}</div>
+                {studio.errorCard.parsed && (
+                  <div className="studio-error-snippet">
+                    {studio.errorCard.parsed.line && (
+                      <strong>Line {studio.errorCard.parsed.line}: </strong>
+                    )}
+                    <span>{studio.errorCard.parsed.error}</span>
+                  </div>
+                )}
+                {showRawLog && studio.errorCard.rawLog && (
+                  <pre className="studio-error-raw-log">{studio.errorCard.rawLog}</pre>
+                )}
+              </div>
+            )}
             {/* If no document generated yet */}
-            {!studio.pdfCurrent && studio.currentTex && <p role="status">The previous PDF may be out of date. Compile this version before finalizing.</p>}
+            {!studio.pdfCurrent && studio.currentTex && studio.docEngine !== 'typst' && <p role="status" className="studio-stale-pdf-banner">The previous PDF may be out of date. Compile this version before finalizing.</p>}
             {!studio.loading && !studio.hasCv && !studio.hasLetter && !studio.currentTex ? (
               <div className="card" style={{ padding: '3.5rem 2rem', textAlign: 'center', margin: '1rem 0' }}>
                 <FileText size={40} color="var(--text-secondary)" style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.6 }} />
@@ -982,57 +1055,24 @@ export function JobDetailPage({
               </div>
             ) : (
               /* Studio Split Workspace */
-              <div className="studio-split-view">
+              <div className={`studio-split-view mobile-show-${mobileView} ${studio.showCheatSheet ? 'with-cheat-rail' : ''}`}>
                 {/* Left Pane: Code / Visual Editor */}
                 <div className="studio-editor-pane">
-                  {/* Segmented Mode Header */}
-                  <div className="studio-mode-header">
-                    {studio.docEngine === 'typst' ? (
-                      <div className="studio-segmented-mode">
-                        <button
-                          type="button"
-                          className={`studio-mode-btn ${editorMode === 'simple' ? 'active' : ''}`}
-                          onClick={() => handleSwitchMode('simple')}
-                          title="Visual form editor with dynamic bullet controls"
-                        >
-                          <span>Simple</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`studio-mode-btn ${editorMode === 'advanced' ? 'active' : ''}`}
-                          onClick={() => handleSwitchMode('advanced')}
-                          title="Full Typst code editor with line numbers"
-                        >
-                          <span>Advanced</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="studio-mode-badge-latex" title="LaTeX documents are edited in Advanced code mode">
-                        <span>Advanced (LaTeX)</span>
-                      </div>
-                    )}
-
-                    <div className="studio-mode-meta">
-                      {editorMode === 'simple' && parsedTypst && (
-                        <span className="studio-mode-pill">
-                          {parsedTypst.kind === 'moderner-cv' ? 'ModernCV Form' : (parsedTypst.kind === 'standard-cv' ? 'Standard CV Form' : 'Cover Letter Form')}
-                        </span>
-                      )}
-                      {editorMode === 'advanced' && (
-                        <span className="studio-mode-pill-muted">
-                          {editorLines.length} lines
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Simple Mode vs Advanced Mode View */}
+                  {editorMode === 'simple' && parsedTypst?.supported && (
+                    <StudioJumpBar
+                      data={parsedTypst.data}
+                      kind={parsedTypst.kind}
+                      openSections={simpleOpenSections}
+                      setOpenSections={setSimpleOpenSections}
+                    />
+                  )}
+                  {/* Simple Mode vs Code mode View */}
                   {editorMode === 'simple' && parsedTypst?.supported ? (
                     <TypstSimpleEditor
                       data={parsedTypst.data}
                       kind={parsedTypst.kind}
                       onChange={handleSimpleChange}
-                      disabled={studio.saving || studio.compiling || studio.aiEditing}
+                      disabled={studio.aiEditing}
                       openSections={simpleOpenSections}
                       setOpenSections={setSimpleOpenSections}
                     />
@@ -1047,7 +1087,7 @@ export function JobDetailPage({
                   )}
 
                   {/* AI Surgical Assistant Prompt Bar */}
-                  <div className="studio-ai-bar">
+                  <div className={`studio-ai-bar ${mobileChipsOpen ? 'chips-open' : ''}`}>
                     <form onSubmit={handleAiPromptSubmit} className="studio-ai-input-row">
                       <Sparkles size={16} className="studio-ai-icon" />
                       <input
@@ -1058,6 +1098,14 @@ export function JobDetailPage({
                         onChange={(e) => setAiPrompt(e.target.value)}
                         disabled={studio.aiEditing}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm ai-suggestions-btn"
+                        aria-expanded={mobileChipsOpen}
+                        onClick={() => setMobileChipsOpen((v) => !v)}
+                      >
+                        Suggestions
+                      </button>
                       <button
                         type="submit"
                         className="studio-ai-submit-btn"
@@ -1134,6 +1182,11 @@ export function JobDetailPage({
 
                 {/* Right Pane: Live PDF Page Preview */}
                 <div className="studio-preview-pane">
+                  <FloatingPreviewHud
+                    pageCount={studio.docEngine === 'typst' ? studioPageCount : (studio.currentImages?.length || 0)}
+                    zoom={studio.zoom}
+                    setZoom={studio.setZoom}
+                  />
                   {studio.docEngine === 'typst' ? (
                     <TypstWasmPreview
                       source={studio.currentTex}
@@ -1142,75 +1195,6 @@ export function JobDetailPage({
                     />
                   ) : (
                     <>
-                      {/* Mobile-only Preview Toolbar */}
-                      <div className="studio-preview-mobile-bar">
-                        <div className="studio-preview-mobile-zoom">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => studio.setZoom((z) => Math.max(50, z - 10))}
-                            title="Zoom Out"
-                          >
-                            <ZoomOut size={13} />
-                          </button>
-                          <span className="studio-zoom-indicator">{studio.zoom}%</span>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => studio.setZoom((z) => Math.min(200, z + 10))}
-                            title="Zoom In"
-                          >
-                            <ZoomIn size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => studio.setZoom(100)}
-                            title="Reset Zoom (100%)"
-                          >
-                            <Maximize2 size={13} />
-                          </button>
-                        </div>
-
-                        {studio.currentImages && studio.currentImages.length > 0 && (
-                          <span className="studio-page-badge">
-                            {studio.currentImages.length} {studio.currentImages.length === 1 ? 'Page' : 'Pages'}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Diagnostic Error Card */}
-                      {studio.errorCard && (
-                        <div className="studio-error-card">
-                          <div className="studio-error-header">
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                              <AlertTriangle size={16} /> Compilation Diagnostic
-                            </span>
-                            {studio.errorCard.rawLog && (
-                              <button
-                                type="button"
-                                className="studio-toggle-log-btn"
-                                onClick={() => setShowRawLog(!showRawLog)}
-                              >
-                                {showRawLog ? 'Hide Raw Log' : 'View Full Log'}
-                              </button>
-                            )}
-                          </div>
-                          <div className="studio-error-message">{studio.errorCard.message}</div>
-                          {studio.errorCard.parsed && (
-                            <div className="studio-error-snippet">
-                              {studio.errorCard.parsed.line && (
-                                <strong>Line {studio.errorCard.parsed.line}: </strong>
-                              )}
-                              <span>{studio.errorCard.parsed.error}</span>
-                            </div>
-                          )}
-                          {showRawLog && studio.errorCard.rawLog && (
-                            <pre className="studio-error-raw-log">{studio.errorCard.rawLog}</pre>
-                          )}
-                        </div>
-                      )}
-
                       {/* Stacked Preview Images */}
                       <div className="studio-pages-scroll-container">
                         {studio.compiling && (
@@ -1243,106 +1227,72 @@ export function JobDetailPage({
                     </>
                   )}
                 </div>
-              </div>
-            )}
-
-            {/* Slide-Out Job Cheat Sheet Drawer */}
-            {studio.showCheatSheet && (
-              <>
-                <div
-                  className="cheat-sheet-overlay"
-                  onClick={() => studio.setShowCheatSheet(false)}
-                />
-                <aside className="cheat-sheet-drawer" aria-label="Job Requirements Cheat Sheet">
-                  <div className="cheat-sheet-header">
-                    <h2 className="cheat-sheet-title">Job Cheat Sheet</h2>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => studio.setShowCheatSheet(false)}
-                      title="Close drawer (Esc)"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  <div className="cheat-sheet-body">
-                    <div>
-                      <h3 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem', fontWeight: 600 }}>
-                        {job.title}
-                      </h3>
-                      <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        {job.company} — {job.location}
-                      </p>
+                {/* Inline Job Cheat Sheet rail: becomes a side drawer on narrow screens */}
+                {studio.showCheatSheet && (
+                  <aside className="studio-cheat-rail" aria-label="Job Requirements Cheat Sheet">
+                    <div className="studio-cheat-rail-header">
+                      <span>Job Cheat Sheet</span>
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        aria-label="Close cheat sheet"
+                        onClick={() => studio.setShowCheatSheet(false)}
+                        title="Close cheat sheet (Esc)"
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
-
-                    {/* Requirements */}
-                    <div>
-                      <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-                        Key Requirements
-                      </h4>
-                      {requirementsList.length > 0 ? (
-                        <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                          {requirementsList.map((r, i) => (
-                            <li key={i} style={{ marginBottom: '0.35rem' }}>{r}</li>
+                    <div className="studio-cheat-rail-body">
+                      <div>
+                        <strong className="cheat-rail-job">{job.title}</strong>
+                        <span className="cheat-rail-company">{job.company}{job.location ? ` · ${job.location}` : ''}</span>
+                      </div>
+                      <div>
+                        <div className="cheat-rail-kicker">Key Requirements</div>
+                        {requirementsList.length > 0 ? (
+                          <ul className="cheat-rail-list">
+                            {requirementsList.map((r, i) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="cheat-rail-muted">{job.skills}</p>
+                        )}
+                      </div>
+                      {tips.length > 0 && (
+                        <div>
+                          <div className="cheat-rail-kicker is-tip">Application Tips</div>
+                          {tips.map((t, i) => (
+                            <div key={i} className="cheat-rail-item">
+                              <strong>{t.title}</strong>
+                              <span>{t.detail}</span>
+                            </div>
                           ))}
-                        </ul>
-                      ) : (
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{job.skills}</p>
+                        </div>
+                      )}
+                      {gaps.length > 0 && (
+                        <div>
+                          <div className="cheat-rail-kicker is-gap">Gaps to Address</div>
+                          {gaps.map((g, i) => (
+                            <div key={i} className="cheat-rail-item is-gap">
+                              <strong>{g.title}</strong>
+                              <span>{g.detail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {researchText && (
+                        <div>
+                          <div className="cheat-rail-kicker">Company Notes</div>
+                          <div className="cheat-rail-item cheat-rail-notes">{researchText}</div>
+                        </div>
                       )}
                     </div>
-
-                    {/* Application Tips */}
-                    {tips.length > 0 && (
-                      <div>
-                        <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--primary-light)' }}>
-                          Application Tips
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {tips.map((t, i) => (
-                            <div key={i} style={{ fontSize: '0.85rem', background: 'var(--bg-color)', padding: '0.6rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                              <strong style={{ display: 'block', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>{t.title}</strong>
-                              <span style={{ color: 'var(--text-secondary)' }}>{t.detail}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Gaps */}
-                    {gaps.length > 0 && (
-                      <div>
-                        <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: '#f59e0b' }}>
-                          Gaps to Address
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {gaps.map((g, i) => (
-                            <div key={i} style={{ fontSize: '0.85rem', background: 'var(--bg-color)', padding: '0.6rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                              <strong style={{ display: 'block', color: '#f59e0b', marginBottom: '0.2rem' }}>{g.title}</strong>
-                              <span style={{ color: 'var(--text-secondary)' }}>{g.detail}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Company Research Notes */}
-                    {researchText && (
-                      <div>
-                        <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-                          Company Research Notes
-                        </h4>
-                        <pre style={{ margin: 0, padding: '0.75rem', fontSize: '0.8rem', whiteSpace: 'pre-wrap', background: 'var(--bg-color)', borderRadius: '4px', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-                          {researchText}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                </aside>
-              </>
+                  </aside>
+                )}
+              </div>
             )}
           </div>
-          </>
         )}
       </div>
     </div>

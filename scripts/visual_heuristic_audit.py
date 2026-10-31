@@ -175,14 +175,14 @@ class VisualHeuristicAuditor:
 
         try:
             self._authenticate(driver)
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".app-nav, .data-table")))
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".app-nav, .calm-jobs-toolbar")))
             time.sleep(0.8)
 
             # --- 1. Jobs Explorer Landing ---
             print("\n[1/17] Auditing Jobs Explorer (Main Table)")
             try:
                 # Click 'All jobs' quick view for clean unconstrained table view
-                all_jobs_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'quick-view-btn') and contains(text(), 'All jobs')]")
+                all_jobs_btn = driver.find_elements(By.XPATH, "//div[contains(@class, 'jobs-stage-tabs')]//button[contains(., 'All')]")
                 if all_jobs_btn:
                     all_jobs_btn[0].click()
                     time.sleep(0.5)
@@ -192,7 +192,7 @@ class VisualHeuristicAuditor:
 
             # --- 2. Jobs Explorer Batch Multi-Select ---
             print("\n[2/17] Auditing Jobs Explorer Multi-Select Batch Actions")
-            checkboxes = driver.find_elements(By.CSS_SELECTOR, ".table-checkbox")
+            checkboxes = driver.find_elements(By.CSS_SELECTOR, ".calm-job-checkbox")
             for cb in checkboxes[:3]:
                 try:
                     cb.click()
@@ -204,11 +204,11 @@ class VisualHeuristicAuditor:
 
             # --- 3. Job Detail Cockpit (Job & Fit) ---
             print("\n[3/17] Auditing Job Detail Cockpit (Job & Fit Subtab)")
-            job_links = driver.find_elements(By.CSS_SELECTOR, ".table-job-title")
+            job_links = driver.find_elements(By.CSS_SELECTOR, ".calm-job-title")
             if job_links:
                 job_links[0].click()
                 time.sleep(1.0)
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".job-detail-page, .cockpit-header")))
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".job-detail-page, .job-hero-card")))
             self._capture(driver, "03_job_cockpit_fit", "Job Detail Cockpit 2-Column Job Specification & Fit Analysis")
 
             # --- 4. Job Detail Analysis & Research Section ---
@@ -221,19 +221,19 @@ class VisualHeuristicAuditor:
 
             # --- 5. In-Job Tailor Studio (Simple Mode) ---
             print("\n[5/17] Auditing In-Job Tailor Studio (Simple Mode)")
-            subtab_btns = driver.find_elements(By.XPATH, "//button[contains(@class, 'job-subtab-btn') and contains(., 'Tailor Studio')]")
+            subtab_btns = driver.find_elements(By.XPATH, "//div[contains(@class, 'job-subtabs')]//button[contains(., 'Tailor Studio')]")
             if subtab_btns:
                 subtab_btns[0].click()
                 time.sleep(1.2)
 
             # Ensure in Simple mode
-            simple_mode_btns = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-mode-btn') and contains(., 'Simple')]")
+            simple_mode_btns = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-inline-mode-btn') and contains(., 'Simple')]")
             if simple_mode_btns:
                 simple_mode_btns[0].click()
                 time.sleep(0.8)
 
             # Expand all sections if button present
-            expand_btn = driver.find_elements(By.XPATH, "//button[contains(text(), 'Expand All')]")
+            expand_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-jumpbar-fold') and contains(., 'Expand all')]")
             if expand_btn:
                 expand_btn[0].click()
                 time.sleep(0.5)
@@ -242,7 +242,7 @@ class VisualHeuristicAuditor:
 
             # --- 6. In-Job Tailor Studio (Advanced Mode) ---
             print("\n[6/17] Auditing In-Job Tailor Studio (Advanced Mode)")
-            adv_mode_btns = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-mode-btn') and contains(., 'Advanced')]")
+            adv_mode_btns = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-inline-mode-btn') and contains(., 'Code')]")
             if adv_mode_btns:
                 adv_mode_btns[0].click()
                 time.sleep(0.8)
@@ -257,7 +257,7 @@ class VisualHeuristicAuditor:
             self._capture(driver, "07_tailor_studio_cheatsheet_open", "In-Job Tailor Studio Slide-Out Job Cheat Sheet Drawer")
 
             # Close drawer
-            cs_close = driver.find_elements(By.CSS_SELECTOR, ".cheat-sheet-header button, .cheat-sheet-overlay")
+            cs_close = driver.find_elements(By.CSS_SELECTOR, ".studio-cheat-rail-header button")
             if cs_close:
                 cs_close[0].click()
                 time.sleep(0.4)
@@ -269,7 +269,7 @@ class VisualHeuristicAuditor:
                 cv_nav[0].click()
                 time.sleep(1.2)
 
-            simple_studio_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-mode-btn') and contains(., 'Simple')]")
+            simple_studio_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-inline-mode-btn') and contains(., 'Simple')]")
             if simple_studio_btn:
                 simple_studio_btn[0].click()
                 time.sleep(0.6)
@@ -277,7 +277,7 @@ class VisualHeuristicAuditor:
 
             # --- 9. Standalone CV Studio (Advanced Mode) ---
             print("\n[9/17] Auditing Standalone CV Studio (Advanced Mode)")
-            adv_studio_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-mode-btn') and contains(., 'Advanced')]")
+            adv_studio_btn = driver.find_elements(By.XPATH, "//button[contains(@class, 'studio-inline-mode-btn') and contains(., 'Code')]")
             if adv_studio_btn:
                 adv_studio_btn[0].click()
                 time.sleep(0.6)
@@ -313,7 +313,7 @@ class VisualHeuristicAuditor:
 
             # --- 13. Scraper Configuration & Logs ---
             print("\n[13/17] Auditing Scraper Configuration & Live Logs")
-            scraper_nav = driver.find_elements(By.XPATH, "//button[contains(@class, 'nav-tab') and contains(., 'Scraper')]")
+            scraper_nav = driver.find_elements(By.XPATH, "//button[contains(@class, 'nav-tab') and contains(., 'Sources')]")
             if scraper_nav:
                 scraper_nav[0].click()
                 time.sleep(0.8)

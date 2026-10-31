@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApi } from '../../api/context';
 import { Settings, Search, RefreshCw, CheckCircle2, AlertCircle, Palette, Check, Type, Database } from 'lucide-react';
+import { PageHeader } from '../PageHeader';
 
 export function SettingsTab({
   aiModel, setAiModel,
@@ -48,7 +49,12 @@ export function SettingsTab({
   }, [api, openrouterModels.length]);
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div className="page-shell">
+      <PageHeader
+        title="Settings"
+        subtitle="Configure workspace theme, typography, AI models, eligibility rules, and database maintenance."
+      />
+      <div className="page-body-narrow">
       {/* Workspace & Appearance */}
       {preferences && (
         <>
@@ -624,7 +630,7 @@ export function SettingsTab({
 
           <div className="danger-action-row">
             <div className="danger-action-info">
-              <div className="danger-action-title" style={{ color: '#ef4444' }}>Reset Entire Database</div>
+              <div className="danger-action-title" style={{ color: 'var(--danger-color)' }}>Reset Entire Database</div>
               <p className="danger-action-desc">
                 Permanently delete every job posting including all applications and pipeline records. Cannot be undone.
               </p>
@@ -636,6 +642,7 @@ export function SettingsTab({
         </div>
       </div>
       </fieldset>
+      </div>
     </div>
   );
 }

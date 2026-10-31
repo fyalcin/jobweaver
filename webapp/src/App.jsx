@@ -270,10 +270,11 @@ function UserWorkspace({ user, demo, onLogout }) {
 
       {jobsProps.editingJob && (
         <EditJobModal
+          editingJob={jobsProps.editingJob}
+          setEditingJob={jobsProps.setEditingJob}
           editTitle={jobsProps.editTitle} setEditTitle={jobsProps.setEditTitle}
           editCompany={jobsProps.editCompany} setEditCompany={jobsProps.setEditCompany}
           savingEdit={jobsProps.savingEdit} handleSaveEdit={jobsProps.handleSaveEdit}
-          onClose={() => jobsProps.setEditingJob(null)}
         />
       )}
 

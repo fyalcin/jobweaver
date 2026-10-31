@@ -105,11 +105,57 @@ try {
     has: page.locator('.simple-section-header').filter({ hasText: /Experience/i }),
   });
   const experienceHeader = experienceSection.locator('.simple-section-header');
-  assert.equal(await experienceSection.locator('.simple-section-body').count(), 0);
-  await experienceHeader.click();
-  await experienceSection.locator('.simple-section-body').waitFor({ timeout: 3000 });
+  assert.equal(await experienceSection.locator('.simple-section-body').count(), 1);
   await experienceHeader.click();
   await experienceSection.locator('.simple-section-body').waitFor({ state: 'detached' });
+  await experienceHeader.click();
+  await experienceSection.locator('.simple-section-body').waitFor({ timeout: 3000 });
+
+  // Typst has no autosave here and Finalize needs a saved build: Compile must stay reachable until built.
+  const jobCompile = page.locator('.job-studio-container .studio-btn-compile');
+  // The default template has no subtitle yet: adding one must stay in Simple Mode and still build natively.
+  const subtitleField = page.locator('.simple-editor-container input.input-base').nth(1);
+  assert.equal(await subtitleField.inputValue(), '');
+  await subtitleField.fill('Atmospheric Data Scientist');
+  assert.equal(await subtitleField.inputValue(), 'Atmospheric Data Scientist');
+  await jobCompile.waitFor();
+
+  // The form stays editable during a compile, and newer typing still counts as unbuilt afterwards.
+  let releaseHeldBuild;
+  const heldBuild = new Promise(done => { releaseHeldBuild = done; });
+  await page.route('**/documents/compile', async route => {
+    const response = await route.fetch();
+    await heldBuild;
+    await route.fulfill({ response });
+  });
+  const startedBuild = page.waitForRequest(request => new URL(request.url()).pathname.endsWith('/documents/compile'));
+  const finishedBuild = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/documents/compile'));
+  await jobCompile.click();
+  await startedBuild;
+  assert(await subtitleField.isEnabled(), 'The form must stay editable during a compile.');
+  await subtitleField.fill('Climate Data Scientist');
+  releaseHeldBuild();
+  await finishedBuild;
+  await page.unroute('**/documents/compile');
+  await page.waitForFunction(() => !document.querySelector('.job-studio-container .studio-btn-compile')?.disabled);
+  assert.equal(await subtitleField.inputValue(), 'Climate Data Scientist', 'Typing during a compile was lost.');
+  assert(await jobCompile.isVisible(), 'Text typed during a compile still needs building.');
+
+  const builtDraft = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/documents/compile'));
+  await jobCompile.click();
+  assert.equal((await (await builtDraft).json()).success, true);
+  await jobCompile.waitFor({ state: 'hidden' });
+  const finalized = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/documents/finalize'));
+  await page.locator('.studio-btn-save-final').click();
+  assert.equal((await finalized).status(), 200, 'A built Typst draft must finalize.');
+  // A failed finalize must say why and offer Compile, including in Editor view on a phone.
+  await page.route('**/documents/finalize', route => route.fulfill({ status: 409, contentType: 'application/json', body: '{"detail":"cv: unsaved changes. Compile this version first."}' }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.studio-btn-save-final').click();
+  await page.locator('.studio-error-card').waitFor();
+  await jobCompile.waitFor();
+  await page.unroute('**/documents/finalize');
+  await page.setViewportSize({ width: 1440, height: 960 });
   await page.getByRole('button', { name: 'Back to Jobs' }).click();
 
   assert.equal((await context.request.put(`${base}/api/config`, { data: {
@@ -138,7 +184,10 @@ try {
   }
   await page.getByRole('button', { name: 'CV Library', exact: true }).click();
   await page.getByRole('combobox', { name: 'Select active studio document' }).selectOption(docs[1].id);
-  await page.getByText('Live WASM', { exact: true }).waitFor();
+  await page.getByRole('toolbar', { name: 'PDF preview zoom and pages' }).waitFor();
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await page.locator('.studio-btn-delete-mobile').isVisible(), 'Phones must be able to delete a CV.');
+  await page.setViewportSize({ width: 1440, height: 960 });
   await page.locator('.typst-page-card svg').waitFor();
 
   // Editing during a real native compile must leave the newer draft saveable.
@@ -214,6 +263,8 @@ try {
   const result = { accountDraftIsolation: true, explicitVerifierRoute: true,
     oldSessionResponseIsolation: true,
     jobSimpleModeSections: true,
+    jobTypstCompileThenFinalize: true,
+    formEditableDuringCompile: true,
     editsDuringCompileRemainSaveable: true,
     failedCompileCanBeRepaired: true,
     isolatedLatexAndTypstPdf: true, browserTypstPreview: true, hostileOriginBlocked: true,

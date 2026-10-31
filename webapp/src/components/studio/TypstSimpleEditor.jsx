@@ -230,8 +230,8 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
   return (
     <div className="simple-editor-container">
       {/* 1. Header & Personal Info Card */}
-      <div className="simple-section-card">
-        <div className="simple-section-header" onClick={() => toggleSection('basics')}>
+      <div id="sec-anchor-basics" className="simple-section-card">
+        <button type="button" className="simple-section-header" aria-expanded={Boolean(openSections['basics'])} onClick={() => toggleSection('basics')}>
           <div className="simple-section-title">
             <User size={16} className="simple-sec-icon" />
             <span>Personal Information</span>
@@ -240,7 +240,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
             )}
           </div>
           {openSections['basics'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </div>
+        </button>
 
         {openSections['basics'] && (
           <div className="simple-section-body">
@@ -356,8 +356,8 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
       {isCoverLetter && (
         <>
           {/* Recipient Card */}
-          <div className="simple-section-card">
-            <div className="simple-section-header" onClick={() => toggleSection('recipient')}>
+          <div id="sec-anchor-recipient" className="simple-section-card">
+            <button type="button" className="simple-section-header" aria-expanded={Boolean(openSections['recipient'])} onClick={() => toggleSection('recipient')}>
               <div className="simple-section-title">
                 <Building2 size={16} className="simple-sec-icon" />
                 <span>Recipient & Letter Details</span>
@@ -366,7 +366,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
                 )}
               </div>
               {openSections['recipient'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </div>
+            </button>
 
             {openSections['recipient'] && (
               <div className="simple-section-body">
@@ -449,8 +449,8 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
           </div>
 
           {/* Letter Body Paragraphs */}
-          <div className="simple-section-card">
-            <div className="simple-section-header" onClick={() => toggleSection('paragraphs')}>
+          <div id="sec-anchor-paragraphs" className="simple-section-card">
+            <button type="button" className="simple-section-header" aria-expanded={Boolean(openSections['paragraphs'])} onClick={() => toggleSection('paragraphs')}>
               <div className="simple-section-title">
                 <FileText size={16} className="simple-sec-icon" />
                 <span>Letter Body</span>
@@ -459,7 +459,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
                 </span>
               </div>
               {openSections['paragraphs'] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </div>
+            </button>
 
             {openSections['paragraphs'] && (
               <div className="simple-section-body">
@@ -538,8 +538,8 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
           const isLines = section.type === 'lines';
 
           return (
-            <div key={secIdx} className="simple-section-card">
-              <div className="simple-section-header" onClick={() => toggleSection(secKey)}>
+            <div key={secIdx} id={`sec-anchor-${secIdx}`} className="simple-section-card">
+              <button type="button" className="simple-section-header" aria-expanded={isOpen} onClick={() => toggleSection(secKey)}>
                 <div className="simple-section-title">
                   {getSectionIcon(section.title)}
                   <span>{section.title}</span>
@@ -561,7 +561,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
                   )}
                 </div>
                 {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </div>
+              </button>
 
               {isOpen && (
                 <div className="simple-section-body">
@@ -600,7 +600,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
                             <label className="simple-label">Skills (comma-separated)</label>
                             <AutoResizeTextarea
                               className="input-base auto-resize-textarea"
-                              minRows={2}
+                              minRows={1}
                               value={grp.skills}
                               onChange={(e) => handleSkillGroupChange(secIdx, grpIdx, 'skills', e.target.value)}
                               disabled={disabled}
@@ -795,7 +795,7 @@ export function TypstSimpleEditor({ data, kind, onChange, disabled = false, open
                             <label className="simple-label">Description</label>
                             <AutoResizeTextarea
                               className="input-base auto-resize-textarea"
-                              minRows={2}
+                              minRows={1}
                               value={item.content}
                               onChange={(e) => handleLineItemChange(secIdx, itIdx, 'content', e.target.value)}
                               disabled={disabled}
